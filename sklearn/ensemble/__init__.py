@@ -20,7 +20,7 @@ from ._voting import VotingClassifier
 from ._voting import VotingRegressor
 from ._stacking import StackingClassifier
 from ._stacking import StackingRegressor
-
+from ._forest_packing import PackedForest
 
 __all__ = ["BaseEnsemble",
            "RandomForestClassifier", "RandomForestRegressor",
@@ -29,5 +29,5 @@ __all__ = ["BaseEnsemble",
            "BaggingRegressor", "IsolationForest", "GradientBoostingClassifier",
            "GradientBoostingRegressor", "AdaBoostClassifier",
            "AdaBoostRegressor", "VotingClassifier", "VotingRegressor",
-           "StackingClassifier", "StackingRegressor",
+           "StackingClassifier", "StackingRegressor", "PackedForest",
            ]
