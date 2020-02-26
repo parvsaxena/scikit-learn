@@ -13,12 +13,18 @@ ctypedef np.npy_uint32 UINT32_t             # Unsigned 32 bit integer
 
 cdef struct PkdNode:
     # Base storage structure for the nodes in a Packed Forest
-    SIZE_t left_child                       # id of the left child of the node
-    SIZE_t right_child                      # id of the right child of the node
+    SIZE_t left_child                       # Id of the left child of the node
+    SIZE_t right_child                      # Id of the right child of the node
     SIZE_t feature                          # Feature used for splitting the node
     DOUBLE_t threshold                      # Threshold value at the node
     SIZE_t n_node_samples                   # Number of samples at the node
     SIZE_t depth                            # Depth of the node in Tree
+
+#cdef struct NodeRecord:
+#    # Aux data structure used for pushing into stack and queue
+#    struct Node* node                       # pointer to the node in original Tree
+#    SIZE_t parent_id                        # position of parent in bin array
+#    SIZE_t depth                            # depth of node in original Tree
 
 # TODO: Change the name
 cdef class PkdForest:
@@ -31,4 +37,6 @@ cdef class PkdForest:
     cdef SIZE_t* bin_offsets                # Tree offsets for bins
     # Methods
     cdef _calc_bin_sizes(self)
-    cdef _calc_bin_nodes(self, list tree, SIZE_t bin_no)
+    cdef _calc_bin_nodes(self, list trees, SIZE_t bin_no)
+    cdef _create_bin(self, list trees, SIZE_t bin_no)
+    cdef _copy_node(self, PkdNode* pkdNode, Node* node)

@@ -41,10 +41,15 @@ cdef class PkdForest:
         self._calc_bin_sizes()
 
         safe_realloc(&self.n_nodes_per_bin, self.n_bins)
+
+
+        # safe_realloc(&(*node), self.n_bins)
+        self.node = <PkdNode**> malloc(self.n_bins * sizeof(PkdNode*))
+
         # Loop to cacl all bins
         for i in range(0, self.n_bins):
-            self._calc_bin_nodes(tree, i)
-
+            self._create_bin(tree, i)
+            #safe_realloc(&self.node[i], self.n_nodes_per_bin[i])
 
     cdef _calc_bin_sizes(self):
         cdef SIZE_t min_bin_size = <SIZE_t>(self.n_trees/self.n_bins)
@@ -64,17 +69,28 @@ cdef class PkdForest:
             if i != 0:
                 self.bin_offsets[i] = self.bin_offsets[i-1] + self.bin_sizes[i-1]
 
-
-
         for i in range(0, self.n_bins):
             print(self.bin_sizes[i], self.bin_offsets[i])
 
     # TODO: Add check to ensure no_of_unique_classes is same for all forest
-    cdef _calc_bin_nodes(self, list tree, SIZE_t bin_no):
+    cdef _calc_bin_nodes(self, list trees, SIZE_t bin_no):
         self.n_nodes_per_bin[bin_no] = 0
         for j in range(self.bin_offsets[bin_no], self.bin_offsets[bin_no] + self.bin_sizes[bin_no]):
-            self.n_nodes_per_bin[bin_no] += tree[j].node_count
+            self.n_nodes_per_bin[bin_no] += trees[j].node_count
 
         print("Without classes", self.n_nodes_per_bin[bin_no])
-        self.n_nodes_per_bin[bin_no] += tree[self.bin_offsets[bin_no]].max_n_classes
+        self.n_nodes_per_bin[bin_no] += trees[self.bin_offsets[bin_no]].max_n_classes
         print("After adding classes", self.n_nodes_per_bin[bin_no])
+
+    cdef _create_bin(self, list trees, SIZE_t bin_no):
+        self._calc_bin_nodes(trees, bin_no)
+        self.node[bin_no] = <PkdNode*>malloc(self.n_nodes_per_bin[bin_no] * sizeof(PkdNode))
+        self.node[bin_no][0].depth = 1
+        print(self.node[bin_no][0].depth)
+
+    cdef _copy_node(self, PkdNode* pkdNode, Node* node):
+        pkdNode.left_child = node.left_child
+        pkdNode.right_child = node.right_child
+        pkdNode.feature = node.feature
+        pkdNode.threshold = node.threshold
+        pkdNode.n_node_samples = node.n_node_samples
