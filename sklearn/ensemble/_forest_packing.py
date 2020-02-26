@@ -27,9 +27,9 @@ __all__ = ["PackedForest"]
 
 class PackedForest:
     def __init__(self,
-                 interleave_depth=1,
-                 n_bins=128,
-                 forest_classifier=None):
+                 interleave_depth = 1,
+                 n_bins = 128,
+                 forest_classifier = None):
 
         self.interleave_depth = interleave_depth
         self.n_bins = n_bins
@@ -41,7 +41,9 @@ class PackedForest:
             print(tree.tree_.node_count, tree.tree_.capacity)
         print(self.tree_list)
 
-        PkdForest([tree.tree_ for tree in self.tree_list], len(self.tree_list))
+        PkdForest([tree.tree_ for tree in self.tree_list],
+                  self.n_bins,
+                  self.interleave_depth)
 
     def predict(self,
                 x):
