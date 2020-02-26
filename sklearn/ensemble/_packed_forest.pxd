@@ -1,4 +1,5 @@
 from libc.stdlib cimport free, malloc
+from libcpp.vector cimport vector
 
 import numpy as np
 cimport numpy as np
@@ -18,11 +19,12 @@ cdef struct PkdNode:
     SIZE_t feature                          # Feature used for splitting the node
     DOUBLE_t threshold                      # Threshold value at the node
     SIZE_t n_node_samples                   # Number of samples at the node
-    SIZE_t depth                            # Depth of the node in Tree
 
 cdef struct NodeRecord:
     # Aux data structure used for pushing into stack and queue
-    Node* node                              # pointer to the node in original Tree
+    SIZE_t tree_id                          # tree_id in forest
+    SIZE_t node_id                          # node_id in tree original Tree
+    SIZE_t node_type                        # 0 = root, 1 = left, 2 = right
     SIZE_t parent_id                        # position of parent in bin array
     SIZE_t depth                            # depth of node in original Tree
 
@@ -35,8 +37,13 @@ cdef class PkdForest:
     cdef SIZE_t* n_nodes_per_bin            # No of nodes in bin []
     cdef SIZE_t* bin_sizes                  # No of trees in bin []
     cdef SIZE_t* bin_offsets                # Tree offsets for bins
+
     # Methods
     cdef _calc_bin_sizes(self)
     cdef _calc_bin_nodes(self, list trees, SIZE_t bin_no)
-    cdef _create_bin(self, list trees, SIZE_t bin_no)
+    cdef _create_bin(self, list trees, SIZE_t bin_no) except +
     cdef _copy_node(self, PkdNode* pkdNode, object node, SIZE_t node_id)
+    cdef bint _is_leaf(self, NodeRecord &node, object tree)
+    cdef bint _is_internal_node(self, NodeRecord &node, object tree)
+    cdef _process_node(self, NodeRecord &node, vector[NodeRecord] &stk, list trees)
+    cdef bint _is_left_child_larger(self, object tree, SIZE_t node_id)

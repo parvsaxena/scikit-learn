@@ -12,7 +12,8 @@ def configuration(parent_package="", top_path=None):
     # TODO: Find compilation flag from James' Implementation and add extra_compile_args
     config.add_extension("_packed_forest",
                          sources=["_packed_forest.pyx"],
-                         include_dirs=[numpy.get_include()])
+                         include_dirs=[numpy.get_include()],
+                         language="c++")
 
     config.add_subpackage("tests")
 
