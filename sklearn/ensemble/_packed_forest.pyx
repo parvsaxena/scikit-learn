@@ -43,13 +43,11 @@ cdef class PkdForest:
         safe_realloc(&self.n_nodes_per_bin, self.n_bins)
 
 
-        # safe_realloc(&(*node), self.n_bins)
         self.node = <PkdNode**> malloc(self.n_bins * sizeof(PkdNode*))
 
         # Loop to cacl all bins
         for i in range(0, self.n_bins):
             self._create_bin(tree, i)
-            #safe_realloc(&self.node[i], self.n_nodes_per_bin[i])
 
     cdef _calc_bin_sizes(self):
         cdef SIZE_t min_bin_size = <SIZE_t>(self.n_trees/self.n_bins)
@@ -88,9 +86,21 @@ cdef class PkdForest:
         self.node[bin_no][0].depth = 1
         print(self.node[bin_no][0].depth)
 
-    cdef _copy_node(self, PkdNode* pkdNode, Node* node):
-        pkdNode.left_child = node.left_child
-        pkdNode.right_child = node.right_child
-        pkdNode.feature = node.feature
-        pkdNode.threshold = node.threshold
-        pkdNode.n_node_samples = node.n_node_samples
+        cdef SIZE_t working_index = 0
+        # set Roots in bin array
+        # TODO: Add interleaving support
+        print("Copy function comparison")
+        for j in range(self.bin_offsets[bin_no], self.bin_offsets[bin_no] + self.bin_sizes[bin_no]):
+            #print(trees[j].node_array)
+            self._copy_node(&self.node[bin_no][working_index], trees[j], 0)
+            print(self.node[bin_no][working_index].left_child, trees[j].children_left[0])
+            working_index += 1
+
+
+    cdef _copy_node(self, PkdNode* pkdNode, object tree, SIZE_t node_id):
+        # print(tree.children_left[node_id])
+        pkdNode.left_child = tree.children_left[node_id]
+        pkdNode.right_child = tree.children_right[node_id]
+        pkdNode.feature = tree.feature[node_id]
+        pkdNode.threshold = tree.threshold[node_id]
+        pkdNode.n_node_samples = tree.n_node_samples[node_id]

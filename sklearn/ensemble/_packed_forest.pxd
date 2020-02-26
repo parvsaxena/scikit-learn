@@ -20,11 +20,11 @@ cdef struct PkdNode:
     SIZE_t n_node_samples                   # Number of samples at the node
     SIZE_t depth                            # Depth of the node in Tree
 
-#cdef struct NodeRecord:
-#    # Aux data structure used for pushing into stack and queue
-#    struct Node* node                       # pointer to the node in original Tree
-#    SIZE_t parent_id                        # position of parent in bin array
-#    SIZE_t depth                            # depth of node in original Tree
+cdef struct NodeRecord:
+    # Aux data structure used for pushing into stack and queue
+    Node* node                              # pointer to the node in original Tree
+    SIZE_t parent_id                        # position of parent in bin array
+    SIZE_t depth                            # depth of node in original Tree
 
 # TODO: Change the name
 cdef class PkdForest:
@@ -39,4 +39,4 @@ cdef class PkdForest:
     cdef _calc_bin_sizes(self)
     cdef _calc_bin_nodes(self, list trees, SIZE_t bin_no)
     cdef _create_bin(self, list trees, SIZE_t bin_no)
-    cdef _copy_node(self, PkdNode* pkdNode, Node* node)
+    cdef _copy_node(self, PkdNode* pkdNode, object node, SIZE_t node_id)
