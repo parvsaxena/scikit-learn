@@ -58,6 +58,7 @@ cdef class PkdForest:
         for i in range(0, self.n_bins):
             self._create_bin(tree, i)
 
+    # Set bin sizes, and bin offset arrays
     cdef _calc_bin_sizes(self):
         cdef SIZE_t min_bin_size = <SIZE_t>(self.n_trees/self.n_bins)
         safe_realloc(&self.bin_sizes, self.n_bins)
@@ -80,6 +81,7 @@ cdef class PkdForest:
             print(self.bin_sizes[i], self.bin_offsets[i])
 
     # TODO: Add check to ensure no_of_unique_classes is same for all forest
+    # set nodes_per_bin and
     cdef _calc_bin_nodes(self, list trees, SIZE_t bin_no):
         self.n_nodes_per_bin[bin_no] = 0
         for j in range(self.bin_offsets[bin_no], self.bin_offsets[bin_no] + self.bin_sizes[bin_no]):
@@ -94,6 +96,10 @@ cdef class PkdForest:
         self.node[bin_no] = <PkdNode*>malloc(self.n_nodes_per_bin[bin_no] * sizeof(PkdNode))
         self.node[bin_no][0].n_node_samples = 1
         print(self.node[bin_no][0].n_node_samples)
+
+        # TODO: Add classes at the end
+        # start from size of tree and add classes in bin array
+        self._set_classes(trees, bin_no)
 
         cdef SIZE_t working_index = 0
         # set Roots in bin array
@@ -151,6 +157,23 @@ cdef class PkdForest:
         if self._is_leaf(node, trees[node.tree_id]):
             # dummy stmt
             abc = 1
+            # Copy processed node to bin
+            # Link Parent to child
         else:
             # dummy stmt
             abc = 2
+            # Copy processed node to bin
+            # Link Parent to child
+            # create and push child nodes
+
+    cdef _set_classes(self, list trees, SIZE_t bin_no):
+        print("Total nodes are ", self.n_nodes_per_bin[bin_no])
+        print("No nodes w/o classes are ", self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes)
+        print("Total classes are", trees[self.bin_offsets[bin_no]].max_n_classes)
+        for i in range(0, trees[self.bin_offsets[bin_no]].max_n_classes):
+            self.node[bin_no][self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + i].left_child = _TREE_LEAF
+            self.node[bin_no][self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + i].right_child = i
+            self.node[bin_no][self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + i].feature = _TREE_UNDEFINED
+            self.node[bin_no][self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + i].threshold = _TREE_UNDEFINED
+            print("node no ", self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + i)
+            print("was assigned ", i)
