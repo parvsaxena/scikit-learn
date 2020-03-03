@@ -51,8 +51,10 @@ cdef class PkdForest:
         self._calc_bin_sizes()
 
         safe_realloc(&self.n_nodes_per_bin, self.n_bins)
+        safe_realloc(&self.working_index, self.n_bins)
 
         self.node = <PkdNode**> malloc(self.n_bins * sizeof(PkdNode*))
+
 
         # Loop to cacl all bins
         for i in range(0, self.n_bins):
@@ -101,15 +103,15 @@ cdef class PkdForest:
         # start from size of tree and add classes in bin array
         self._set_classes(trees, bin_no)
 
-        cdef SIZE_t working_index = 0
+        self.working_index[bin_no] = 0
         # set Roots in bin array
         # TODO: Add interleaving support
         print("Copy function comparison")
         for j in range(self.bin_offsets[bin_no], self.bin_offsets[bin_no] + self.bin_sizes[bin_no]):
             #print(trees[j].node_array)
-            self._copy_node(&self.node[bin_no][working_index], trees[j], 0)
-            print(self.node[bin_no][working_index].left_child, trees[j].children_left[0])
-            working_index += 1
+            self._copy_node(&self.node[bin_no][self.working_index[bin_no]], trees[j], 0)
+            print(self.node[bin_no][self.working_index[bin_no]].left_child, trees[j].children_left[0])
+            self.working_index[bin_no] += 1
 
         # Create a stack
         cdef vector[NodeRecord] stk
@@ -119,7 +121,6 @@ cdef class PkdForest:
             # assert stk.empty()
             # TODO: Assuming root can't be leaf node, crosscheck the assumption
             # Push left or right onto stack
-            #if trees[j].n_node_samples[trees[j].children_left[0]] > trees[j].n_node_samples[trees[j].children_right[0]]:
             if self._is_left_child_larger(trees[j], 0):
                 # push right, then left
                 stk.push_back(NodeRecord(j, trees[j].children_right[0], IS_RIGHT, j - self.bin_offsets[bin_no], 1))
@@ -131,9 +132,10 @@ cdef class PkdForest:
 
             # while stk not empty, keep going
             while not stk.empty():
-                self._process_node(stk.back(), stk, trees)
+                self._process_node(stk.back(), stk, trees, bin_no)
                 # process it
 
+    # Copy node from tree
     cdef _copy_node(self, PkdNode* pkdNode, object tree, SIZE_t node_id):
         # print(tree.children_left[node_id])
         pkdNode.left_child = tree.children_left[node_id]
@@ -141,6 +143,21 @@ cdef class PkdForest:
         pkdNode.feature = tree.feature[node_id]
         pkdNode.threshold = tree.threshold[node_id]
         pkdNode.n_node_samples = tree.n_node_samples[node_id]
+
+    # Copy node from NodeRecord
+    cdef _copy_processed_node(self, PkdNode *pkdNode, NodeRecord &node, SIZE_t working_index, list trees):
+        pkdNode.left_child = trees[node.tree_id].children_left[node.node_id]
+        pkdNode.right_child = trees[node.tree_id].children_right[node.node_id]
+        pkdNode.feature = trees[node.tree_id].feature[node.node_id]
+        pkdNode.threshold = trees[node.tree_id].threshold[node.node_id]
+        pkdNode.n_node_samples = trees[node.tree_id].n_node_samples[node.node_id]
+
+    cdef _link_parent_to_node(self, PkdNode *pkdNode_p, SIZE_t working_index, NodeRecord &node):
+        # link the bin position of node to parent's left or right
+        if node.node_type == IS_LEFT:
+            pkdNode_p.left_child = working_index
+        elif node.node_type == IS_RIGHT:
+            pkdNode_p.right_child = working_index
 
     cdef bint _is_leaf(self, NodeRecord &node, object tree):
         return tree.children_left[node.node_id] == _TREE_LEAF
@@ -151,7 +168,7 @@ cdef class PkdForest:
     cdef bint _is_left_child_larger(self, object tree, SIZE_t node_id):
         return tree.n_node_samples[tree.children_left[node_id]] > tree.n_node_samples[tree.children_right[node_id]]
 
-    cdef _process_node(self, NodeRecord &node, vector[NodeRecord] &stk, list trees):
+    cdef _process_node(self, NodeRecord &node, vector[NodeRecord] &stk, list trees, SIZE_t bin_no):
         print("Node ID is", node.node_id)
         stk.pop_back()
         if self._is_leaf(node, trees[node.tree_id]):
@@ -159,11 +176,16 @@ cdef class PkdForest:
             abc = 1
             # Copy processed node to bin
             # Link Parent to child
+            # Increment working_index
         else:
             # dummy stmt
             abc = 2
             # Copy processed node to bin
+            self._copy_processed_node(&self.node[bin_no][self.working_index[bin_no]], node, self.working_index[bin_no], trees)
             # Link Parent to child
+            self._link_parent_to_node(&self.node[bin_no][self.working_index[bin_no]], self.working_index[bin_no], node)
+            # Increment working index
+            self.working_index[bin_no] += 1
             # create and push child nodes
 
     cdef _set_classes(self, list trees, SIZE_t bin_no):
