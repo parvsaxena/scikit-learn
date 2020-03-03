@@ -109,6 +109,12 @@ cdef class PkdForest:
         print("Copy function comparison")
         for j in range(self.bin_offsets[bin_no], self.bin_offsets[bin_no] + self.bin_sizes[bin_no]):
             #print(trees[j].node_array)
+            print("Trees")
+            print(trees[j].children_right)
+            print(trees[j].children_left)
+            print(trees[j].feature)
+            print(trees[j].threshold)
+            print(trees[j].n_node_samples)
             self._copy_node(&self.node[bin_no][self.working_index[bin_no]], trees[j], 0)
             print(self.node[bin_no][self.working_index[bin_no]].left_child, trees[j].children_left[0])
             self.working_index[bin_no] += 1
@@ -168,25 +174,42 @@ cdef class PkdForest:
     cdef bint _is_left_child_larger(self, object tree, SIZE_t node_id):
         return tree.n_node_samples[tree.children_left[node_id]] > tree.n_node_samples[tree.children_right[node_id]]
 
-    cdef _process_node(self, NodeRecord &node, vector[NodeRecord] &stk, list trees, SIZE_t bin_no):
+    cdef _process_node(self, NodeRecord node, vector[NodeRecord] &stk, list trees, SIZE_t bin_no):
         print("Node ID is", node.node_id)
         stk.pop_back()
         if self._is_leaf(node, trees[node.tree_id]):
             # dummy stmt
+            print("Going into leaf")
             abc = 1
-            # Copy processed node to bin
-            # Link Parent to child
-            # Increment working_index
+            # Find max class in value
+            # Link Parent to leaf class
+            # Increment working_index - NO NEED???
+
         else:
             # dummy stmt
+            print("Going into non-leaf")
             abc = 2
             # Copy processed node to bin
             self._copy_processed_node(&self.node[bin_no][self.working_index[bin_no]], node, self.working_index[bin_no], trees)
+
             # Link Parent to child
             self._link_parent_to_node(&self.node[bin_no][self.working_index[bin_no]], self.working_index[bin_no], node)
+
+            # create and push child nodes
+            if self._is_left_child_larger(trees[node.tree_id], node.node_id):
+                # Push right child, then left
+                print("Pushing left greater")
+                stk.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_right[node.node_id], IS_RIGHT, self.working_index[bin_no], node.depth + 1))
+                stk.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_left[node.node_id], IS_LEFT, self.working_index[bin_no], node.depth + 1))
+            else:
+                # Push left child, then right
+                print("Pushing right greater")
+                stk.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_left[node.node_id], IS_LEFT, self.working_index[bin_no], node.depth + 1))
+                stk.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_right[node.node_id], IS_RIGHT, self.working_index[bin_no], node.depth + 1))
+
+            print(node.node_id, self.working_index[bin_no])
             # Increment working index
             self.working_index[bin_no] += 1
-            # create and push child nodes
 
     cdef _set_classes(self, list trees, SIZE_t bin_no):
         print("Total nodes are ", self.n_nodes_per_bin[bin_no])
