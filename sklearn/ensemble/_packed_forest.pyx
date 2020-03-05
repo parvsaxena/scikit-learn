@@ -229,3 +229,52 @@ cdef class PkdForest:
             self.node[bin_no][self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + i].threshold = _TREE_UNDEFINED
             print("node no ", self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + i)
             print("was assigned ", i)
+
+    cpdef np.ndarray predict(self, object X):
+        # Create loop for all observations
+        # TODO: NOTE, max_n_classes no assigned any value in code
+        cdef SIZE_t[:,:] predict_array = np.zeros(shape=(X.shape[0], self.n_trees), dtype=np.intp)
+        # see bin size of 1st bin as it will be maximum, and differ by 1 tree from others(at max)
+        cdef SIZE_t[:,:] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.intp)
+        print("Curr_node shape is", curr_node.shape, curr_node.ndim)
+        print("Predict shape is", predict_array.shape, predict_array.ndim)
+        # TODO: Add parallel support here
+
+        for obs_no in range(0, X.shape[0]):
+            for bin_no in range(0, self.n_bins):
+                print("STarting code for bin no", bin_no)
+
+                # Initialize to tree roots in the bins
+                for tree_no in range(0, self.bin_sizes[bin_no]):
+                    curr_node[bin_no][tree_no] = tree_no
+
+                print("Curr node after initialization is", np.asarray(curr_node[bin_no,:]))
+
+                internal_nodes_reached = self.bin_sizes[bin_no]
+                while internal_nodes_reached > 0:
+                    internal_nodes_reached = 0
+                    for tree_no in range(0, self.bin_sizes[bin_no]):
+                        print("Tree no", tree_no)
+                        print("Printing node", self.node[bin_no][curr_node[bin_no][tree_no]])
+                        if not self._is_class_node(&self.node[bin_no][curr_node[bin_no][tree_no]]):
+                            curr_node[bin_no,tree_no] = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
+                            internal_nodes_reached += 1
+
+                # time to predict classes
+                for tree_no in range(0, self.bin_sizes[bin_no]):
+                    predict_array[obs_no, self.bin_offsets[bin_no] + tree_no] = self.node[bin_no][curr_node[bin_no,tree_no]].right_child
+
+            print("Prediction internally is", np.asarray(predict_array[obs_no,:]))
+
+        return np.asarray(predict_array, dtype = np.intp)
+
+    cdef bint _is_class_node(self, PkdNode* pkdNode):
+        return pkdNode.left_child == TREE_LEAF
+
+    # TODO: Avoid passing object X, pass reference
+    cdef SIZE_t _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, object X):
+        # TODO: Make sure this pkdNode is not class node
+        if(X[obs_no][pkdNode.feature] <= pkdNode.threshold):
+            return pkdNode.left_child
+        else:
+            return pkdNode.right_child

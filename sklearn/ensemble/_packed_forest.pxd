@@ -38,6 +38,8 @@ cdef class PkdForest:
     cdef SIZE_t* bin_sizes                  # No of trees in bin []
     cdef SIZE_t* bin_offsets                # Tree offsets for bins
     cdef SIZE_t* working_index              # working index for node in bin []
+    # TODO: Assign the variable and replace
+    #cdef SIZE_t  max_n_classes              # Maximum no of classes in forest
 
     # Methods
     cdef _calc_bin_sizes(self)
@@ -45,9 +47,12 @@ cdef class PkdForest:
     cdef _create_bin(self, list trees, SIZE_t bin_no) except +
     cdef _copy_node(self, PkdNode* pkdNode, object node, SIZE_t node_id)
     cdef bint _is_leaf(self, NodeRecord &node, object tree)
+    cdef bint _is_class_node(self, PkdNode* pkdNode)
     cdef bint _is_internal_node(self, NodeRecord &node, object tree)
     cdef _process_node(self, NodeRecord node, vector[NodeRecord] &stk, list trees, SIZE_t bin_no)
     cdef bint _is_left_child_larger(self, object tree, SIZE_t node_id)
     cdef _set_classes(self, list trees, SIZE_t bin_no)
     cdef _copy_processed_node(self, PkdNode *pkdNode, NodeRecord &node, SIZE_t working_index, list trees)
     cdef _link_parent_to_node(self, PkdNode *pkdNode_p, SIZE_t working_index, NodeRecord &node)
+    cpdef np.ndarray predict(self, object X)
+    cdef SIZE_t _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, object X)

@@ -41,10 +41,11 @@ class PackedForest:
             print(tree.tree_.node_count, tree.tree_.capacity)
         print(self.tree_list)
 
-        PkdForest([tree.tree_ for tree in self.tree_list],
-                  self.n_bins,
-                  self.interleave_depth)
+        self._pkd_forest = PkdForest([tree.tree_ for tree in self.tree_list],
+                                     self.n_bins,
+                                     self.interleave_depth)
 
-    def predict(self,
-                x):
-        pass
+    def predict(self, X):
+        print("Shape is", X.shape)
+        outputs = self._pkd_forest.predict(X)
+        return self.forest_classifier.estimators_[0].classes_.take(np.max(outputs, axis=1), axis=0)
