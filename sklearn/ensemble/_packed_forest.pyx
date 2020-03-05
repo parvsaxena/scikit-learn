@@ -164,6 +164,8 @@ cdef class PkdForest:
             pkdNode_p.left_child = working_index
         elif node.node_type == IS_RIGHT:
             pkdNode_p.right_child = working_index
+        else:
+            print("Case not handled yet")
 
     cdef bint _is_leaf(self, NodeRecord &node, object tree):
         return tree.children_left[node.node_id] == _TREE_LEAF
@@ -182,7 +184,12 @@ cdef class PkdForest:
             print("Going into leaf")
             abc = 1
             # Find max class in value
+            print("Shape of value array is ", trees[node.tree_id].value.shape)
+            node_class_label = np.argmax(trees[node.tree_id].value[node.node_id][0])
+            print("Array is ", trees[node.tree_id].value[node.node_id][0])
+            print("node class ", node_class_label)
             # Link Parent to leaf class
+            self._link_parent_to_node(&self.node[bin_no][node.parent_id], self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + node_class_label, node)
             # Increment working_index - NO NEED???
 
         else:
@@ -193,7 +200,7 @@ cdef class PkdForest:
             self._copy_processed_node(&self.node[bin_no][self.working_index[bin_no]], node, self.working_index[bin_no], trees)
 
             # Link Parent to child
-            self._link_parent_to_node(&self.node[bin_no][self.working_index[bin_no]], self.working_index[bin_no], node)
+            self._link_parent_to_node(&self.node[bin_no][node.parent_id], self.working_index[bin_no], node)
 
             # create and push child nodes
             if self._is_left_child_larger(trees[node.tree_id], node.node_id):
