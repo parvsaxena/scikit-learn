@@ -56,7 +56,7 @@ cdef class PkdForest:
         self.node = <PkdNode**> malloc(self.n_bins * sizeof(PkdNode*))
 
 
-        # Loop to cacl all bins
+        # Loop to calc all bins
         for i in range(0, self.n_bins):
             self._create_bin(tree, i)
 
@@ -80,6 +80,7 @@ cdef class PkdForest:
                 self.bin_offsets[i] = self.bin_offsets[i-1] + self.bin_sizes[i-1]
 
         for i in range(0, self.n_bins):
+            print("BIN SIZES, BIN_OFFSETS")
             print(self.bin_sizes[i], self.bin_offsets[i])
 
     # TODO: Add check to ensure no_of_unique_classes is same for all forest
@@ -96,8 +97,8 @@ cdef class PkdForest:
     cdef _create_bin(self, list trees, SIZE_t bin_no) except +:
         self._calc_bin_nodes(trees, bin_no)
         self.node[bin_no] = <PkdNode*>malloc(self.n_nodes_per_bin[bin_no] * sizeof(PkdNode))
-        self.node[bin_no][0].n_node_samples = 1
-        print(self.node[bin_no][0].n_node_samples)
+        #self.node[bin_no][0].n_node_samples = 1
+        #print(self.node[bin_no][0].n_node_samples)
 
         # TODO: Add classes at the end
         # start from size of tree and add classes in bin array
@@ -241,6 +242,8 @@ cdef class PkdForest:
         # TODO: Add parallel support here
 
         for obs_no in range(0, X.shape[0]):
+            print("observation no ", obs_no)
+            print("observation is ", X[obs_no])
             for bin_no in range(0, self.n_bins):
                 print("STarting code for bin no", bin_no)
 
@@ -259,6 +262,7 @@ cdef class PkdForest:
                         if not self._is_class_node(&self.node[bin_no][curr_node[bin_no][tree_no]]):
                             curr_node[bin_no,tree_no] = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
                             internal_nodes_reached += 1
+                            print("current node now is", curr_node[bin_no,tree_no])
 
                 # time to predict classes
                 for tree_no in range(0, self.bin_sizes[bin_no]):

@@ -48,4 +48,9 @@ class PackedForest:
     def predict(self, X):
         print("Shape is", X.shape)
         outputs = self._pkd_forest.predict(X)
-        return self.forest_classifier.estimators_[0].classes_.take(np.max(outputs, axis=1), axis=0)
+        for i in range(0, outputs.shape[0]):
+            print("OUTPUT IS", outputs[i])
+        # return self.forest_classifier.estimators_[0].classes_.take(np.max(outputs, axis=1), axis=0)
+        # return np.argmax(np.bincount(outputs, axis=1), axis=1)
+        a = np.apply_along_axis(np.bincount, axis=1, arr=outputs, minlength = np.max(outputs) +1)
+        return np.argmax(a, axis=1)
