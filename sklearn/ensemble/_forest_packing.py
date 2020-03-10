@@ -27,9 +27,9 @@ __all__ = ["PackedForest"]
 
 class PackedForest:
     def __init__(self,
-                 interleave_depth = 1,
-                 n_bins = 128,
-                 forest_classifier = None):
+                 interleave_depth=1,
+                 n_bins=128,
+                 forest_classifier=None):
 
         self.interleave_depth = interleave_depth
         self.n_bins = n_bins
@@ -45,12 +45,26 @@ class PackedForest:
                                      self.n_bins,
                                      self.interleave_depth)
 
-    def predict(self, X):
+    def predict(self, X, majority_vote=False):
+
+        print("LET US BEGIN THE GAME")
+
+        for i in range(0, len(self.tree_list)):
+            print("Prediction for tree", i, "original was")
+            prediction = self.tree_list[i].tree_.predict(np.asarray(X, dtype=np.float32))
+            for j in range(0, prediction.shape[0]):
+                print("the orig prediction", j, prediction[j])
+
+        print("LET US END THE GAME")
         print("Shape is", X.shape)
-        outputs = self._pkd_forest.predict(X)
-        for i in range(0, outputs.shape[0]):
-            print("OUTPUT IS", outputs[i])
-        # return self.forest_classifier.estimators_[0].classes_.take(np.max(outputs, axis=1), axis=0)
-        # return np.argmax(np.bincount(outputs, axis=1), axis=1)
-        a = np.apply_along_axis(np.bincount, axis=1, arr=outputs, minlength = np.max(outputs) +1)
-        return np.argmax(a, axis=1)
+        outputs = self._pkd_forest.predict(X, majority_vote)
+        if majority_vote:
+            for i in range(0, outputs.shape[0]):
+                print("OUTPUT IS", outputs[i])
+            # return self.forest_classifier.estimators_[0].classes_.take(np.max(outputs, axis=1), axis=0)
+            # return np.argmax(np.bincount(outputs, axis=1), axis=1)
+            # TODO: Apply classes
+            a = np.apply_along_axis(np.bincount, axis=1, arr=outputs, minlength = np.max(outputs) +1)
+            return np.argmax(a, axis=1)
+        else:
+            return np.argmax(outputs, axis=1)

@@ -6,6 +6,7 @@ cimport numpy as np
 from ..tree._tree cimport Tree
 from ..tree._tree cimport Node
 
+#TODO: Correct return types across the thing
 ctypedef np.npy_float32 DTYPE_t             # Type of X
 ctypedef np.npy_float64 DOUBLE_t            # Type of y, sample_weight
 ctypedef np.npy_intp SIZE_t                 # Type for indices and counters
@@ -39,7 +40,8 @@ cdef class PkdForest:
     cdef SIZE_t* bin_offsets                # Tree offsets for bins
     cdef SIZE_t* working_index              # working index for node in bin []
     # TODO: Assign the variable and replace
-    #cdef SIZE_t  max_n_classes              # Maximum no of classes in forest
+    cdef SIZE_t max_n_classes              # Maximum no of classes in forest
+    cdef DOUBLE_t[:,:,:,:] value            # Value array
 
     # Methods
     cdef _calc_bin_sizes(self)
@@ -54,5 +56,6 @@ cdef class PkdForest:
     cdef _set_classes(self, list trees, SIZE_t bin_no)
     cdef _copy_processed_node(self, PkdNode *pkdNode, NodeRecord &node, SIZE_t working_index, list trees)
     cdef _link_parent_to_node(self, PkdNode *pkdNode_p, SIZE_t working_index, NodeRecord &node)
-    cpdef np.ndarray predict(self, object X)
-    cdef SIZE_t _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, object X)
+    cpdef np.ndarray predict(self, object X, bint majority_vote)
+    cdef (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, object X)
+    cdef SIZE_t _max_nodes_across_bin(self)

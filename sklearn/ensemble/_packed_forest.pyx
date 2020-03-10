@@ -27,9 +27,9 @@ TREE_LEAF = -1
 TREE_UNDEFINED = -2
 cdef SIZE_t _TREE_LEAF = TREE_LEAF
 cdef SIZE_t _TREE_UNDEFINED = TREE_UNDEFINED
-cdef SIZE_t IS_ROOT = 0
-cdef SIZE_t IS_LEFT = 1
-cdef SIZE_t IS_RIGHT = 2
+cdef SIZE_t IS_ROOT = 2
+cdef SIZE_t IS_LEFT = 0
+cdef SIZE_t IS_RIGHT = 1
 
 cdef class PkdForest:
     def __cinit__(self, list tree, SIZE_t n_bins, SIZE_t depth_interleaving):
@@ -41,6 +41,7 @@ cdef class PkdForest:
         self.n_trees = len(tree)
         self.n_bins = n_bins
         self.depth_interleaving = depth_interleaving
+        self.max_n_classes = tree[0].max_n_classes
 
         print("No of trees, first tree size, interleave_depth and bins are")
         print( self.n_trees,
@@ -55,10 +56,25 @@ cdef class PkdForest:
 
         self.node = <PkdNode**> malloc(self.n_bins * sizeof(PkdNode*))
 
+        # Loop to calc nodes in bins
+        for i in range(0, self.n_bins):
+            self._calc_bin_nodes(tree, i)
+
+        max_nodes_across_bin = self._max_nodes_across_bin()
+        self.value = np.zeros(shape=(self.n_bins, max_nodes_across_bin, 2, self.max_n_classes), dtype=np.float64)
 
         # Loop to calc all bins
         for i in range(0, self.n_bins):
             self._create_bin(tree, i)
+
+
+    cdef SIZE_t _max_nodes_across_bin(self):
+        max_nodes = 0
+        for i in range(0, self.n_bins):
+            if self.n_nodes_per_bin[i] > max_nodes:
+                max_nodes = self.n_nodes_per_bin[i]
+        print("Max nodes across bins ", max_nodes)
+        return max_nodes
 
     # Set bin sizes, and bin offset arrays
     cdef _calc_bin_sizes(self):
@@ -95,7 +111,6 @@ cdef class PkdForest:
         print("After adding classes", self.n_nodes_per_bin[bin_no])
 
     cdef _create_bin(self, list trees, SIZE_t bin_no) except +:
-        self._calc_bin_nodes(trees, bin_no)
         self.node[bin_no] = <PkdNode*>malloc(self.n_nodes_per_bin[bin_no] * sizeof(PkdNode))
         #self.node[bin_no][0].n_node_samples = 1
         #print(self.node[bin_no][0].n_node_samples)
@@ -125,7 +140,7 @@ cdef class PkdForest:
 
         for j in range(self.bin_offsets[bin_no], self.bin_offsets[bin_no] + self.bin_sizes[bin_no]):
             # TODO: Put assertion back after completing while loop below
-            # assert stk.empty()
+            assert stk.empty()
             # TODO: Assuming root can't be leaf node, crosscheck the assumption
             # Push left or right onto stack
             if self._is_left_child_larger(trees[j], 0):
@@ -180,6 +195,7 @@ cdef class PkdForest:
     cdef _process_node(self, NodeRecord node, vector[NodeRecord] &stk, list trees, SIZE_t bin_no):
         print("Node ID is", node.node_id)
         stk.pop_back()
+        cdef DOUBLE_t[:] value_array = trees[node.tree_id].value[node.node_id][0]/np.sum(trees[node.tree_id].value[node.node_id][0])
         if self._is_leaf(node, trees[node.tree_id]):
             # dummy stmt
             print("Going into leaf")
@@ -187,10 +203,19 @@ cdef class PkdForest:
             # Find max class in value
             print("Shape of value array is ", trees[node.tree_id].value.shape)
             node_class_label = np.argmax(trees[node.tree_id].value[node.node_id][0])
+            #TODO: Add a check in python funtion to make sure n_outputs = 1
+            # Second value in this is 0 for that reason
             print("Array is ", trees[node.tree_id].value[node.node_id][0])
             print("node class ", node_class_label)
             # Link Parent to leaf class
             self._link_parent_to_node(&self.node[bin_no][node.parent_id], self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + node_class_label, node)
+            # value_array = (trees[node.tree_id].value[node.node_id][0])/np.sum(trees[node.tree_id].value[node.node_id][0])
+            if node.node_type == IS_LEFT:
+                self.value[bin_no][node.parent_id][IS_LEFT] = value_array
+                print("Array after processing ", np.asarray(self.value[bin_no][node.parent_id][IS_LEFT]))
+            else:
+                self.value[bin_no][node.parent_id][IS_RIGHT] = value_array
+                print("Array after processing ", np.asarray(self.value[bin_no][node.parent_id][IS_RIGHT]))
             # Increment working_index - NO NEED???
 
         else:
@@ -231,10 +256,11 @@ cdef class PkdForest:
             print("node no ", self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + i)
             print("was assigned ", i)
 
-    cpdef np.ndarray predict(self, object X):
+    cpdef np.ndarray predict(self, object X, bint majority_vote):
         # Create loop for all observations
         # TODO: NOTE, max_n_classes no assigned any value in code
         cdef SIZE_t[:,:] predict_array = np.zeros(shape=(X.shape[0], self.n_trees), dtype=np.intp)
+        cdef DOUBLE_t[:,:,:] predict_matrix = np.zeros(shape=(X.shape[0], self.n_trees, self.max_n_classes), dtype=np.float64)
         # see bin size of 1st bin as it will be maximum, and differ by 1 tree from others(at max)
         cdef SIZE_t[:,:] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.intp)
         print("Curr_node shape is", curr_node.shape, curr_node.ndim)
@@ -256,11 +282,17 @@ cdef class PkdForest:
                 internal_nodes_reached = self.bin_sizes[bin_no]
                 while internal_nodes_reached > 0:
                     internal_nodes_reached = 0
+                    print("Curr node after initialization is ", np.asarray(curr_node[bin_no,:]))
                     for tree_no in range(0, self.bin_sizes[bin_no]):
                         print("Tree no", tree_no)
                         print("Printing node", self.node[bin_no][curr_node[bin_no][tree_no]])
                         if not self._is_class_node(&self.node[bin_no][curr_node[bin_no][tree_no]]):
-                            curr_node[bin_no,tree_no] = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
+                            next_node, child = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
+                            if self._is_class_node(&self.node[bin_no][next_node]):
+                                predict_matrix[obs_no,tree_no]= self.value[bin_no][curr_node[bin_no][tree_no]][child]
+                            curr_node[bin_no,tree_no] = next_node
+                            print("Next node and child are", next_node, child)
+                            print("Predict matrix here is ", np.asarray(predict_matrix[obs_no,tree_no]))
                             internal_nodes_reached += 1
                             print("current node now is", curr_node[bin_no,tree_no])
 
@@ -268,17 +300,27 @@ cdef class PkdForest:
                 for tree_no in range(0, self.bin_sizes[bin_no]):
                     predict_array[obs_no, self.bin_offsets[bin_no] + tree_no] = self.node[bin_no][curr_node[bin_no,tree_no]].right_child
 
+
             print("Prediction internally is", np.asarray(predict_array[obs_no,:]))
 
-        return np.asarray(predict_array, dtype = np.intp)
+        if majority_vote == False:
+            # prediction by average
+            print("Avg probabilities are")
+            array = np.mean(predict_matrix, axis=1)
+            for i in range(0, array.shape[0]):
+                print("Average prediction", i, array[i])
+
+            return array
+        else:
+            return np.asarray(predict_array, dtype = np.intp)
 
     cdef bint _is_class_node(self, PkdNode* pkdNode):
         return pkdNode.left_child == TREE_LEAF
 
     # TODO: Avoid passing object X, pass reference
-    cdef SIZE_t _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, object X):
+    cdef (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, object X):
         # TODO: Make sure this pkdNode is not class node
         if(X[obs_no][pkdNode.feature] <= pkdNode.threshold):
-            return pkdNode.left_child
+            return pkdNode.left_child, IS_LEFT
         else:
-            return pkdNode.right_child
+            return pkdNode.right_child, IS_RIGHT
