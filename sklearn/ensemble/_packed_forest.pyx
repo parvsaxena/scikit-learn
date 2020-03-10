@@ -289,10 +289,12 @@ cdef class PkdForest:
                         if not self._is_class_node(&self.node[bin_no][curr_node[bin_no][tree_no]]):
                             next_node, child = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
                             if self._is_class_node(&self.node[bin_no][next_node]):
-                                predict_matrix[obs_no,tree_no]= self.value[bin_no][curr_node[bin_no][tree_no]][child]
+                                print("Class node found!!")
+                                predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]]= self.value[bin_no][curr_node[bin_no][tree_no]][child]
+                                print("Writing for original tree no ", tree_no + self.bin_offsets[bin_no])
                             curr_node[bin_no,tree_no] = next_node
                             print("Next node and child are", next_node, child)
-                            print("Predict matrix here is ", np.asarray(predict_matrix[obs_no,tree_no]))
+                            print("Predict matrix here is ", np.asarray(predict_matrix[obs_no,tree_no + self.bin_offsets[bin_no]]))
                             internal_nodes_reached += 1
                             print("current node now is", curr_node[bin_no,tree_no])
 
@@ -308,6 +310,7 @@ cdef class PkdForest:
             print("Avg probabilities are")
             array = np.mean(predict_matrix, axis=1)
             for i in range(0, array.shape[0]):
+                print("Before avg is", i, np.asarray(predict_matrix[i]))
                 print("Average prediction", i, array[i])
 
             return array
