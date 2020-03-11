@@ -52,6 +52,7 @@ cdef class PkdForest:
     cdef bint _is_class_node(self, PkdNode* pkdNode)
     cdef bint _is_internal_node(self, NodeRecord &node, object tree)
     cdef _process_node(self, NodeRecord node, vector[NodeRecord] &stk, list trees, SIZE_t bin_no)
+    cdef _process_leaf_node(self, list trees, NodeRecord &node, SIZE_t bin_no)
     cdef bint _is_left_child_larger(self, object tree, SIZE_t node_id)
     cdef _set_classes(self, list trees, SIZE_t bin_no)
     cdef _copy_processed_node(self, PkdNode *pkdNode, NodeRecord &node, SIZE_t working_index, list trees)

@@ -192,31 +192,39 @@ cdef class PkdForest:
     cdef bint _is_left_child_larger(self, object tree, SIZE_t node_id):
         return tree.n_node_samples[tree.children_left[node_id]] > tree.n_node_samples[tree.children_right[node_id]]
 
+    cdef _process_leaf_node(self, list trees, NodeRecord &node, SIZE_t bin_no):
+        # dummy stmt
+        print("Going into leaf")
+        abc = 1
+
+        # Find max class in value
+        print("Shape of value array is ", trees[node.tree_id].value.shape)
+        node_class_label = np.argmax(trees[node.tree_id].value[node.node_id][0])
+
+        #TODO: Add a check in python funtion to make sure n_outputs = 1
+        # Second value in this is 0 for that reason
+        print("Array is ", trees[node.tree_id].value[node.node_id][0])
+        print("node class ", node_class_label)
+
+        # Link Parent to leaf class
+        self._link_parent_to_node(&self.node[bin_no][node.parent_id], self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + node_class_label, node)
+
+        cdef DOUBLE_t[:] value_array = trees[node.tree_id].value[node.node_id][0]/np.sum(trees[node.tree_id].value[node.node_id][0])
+
+        if node.node_type == IS_LEFT:
+            self.value[bin_no][node.parent_id][IS_LEFT] = value_array
+            print("Array after processing ", np.asarray(self.value[bin_no][node.parent_id][IS_LEFT]))
+        else:
+            self.value[bin_no][node.parent_id][IS_RIGHT] = value_array
+            print("Array after processing ", np.asarray(self.value[bin_no][node.parent_id][IS_RIGHT]))
+        # Increment working_index - NO NEED???
+
     cdef _process_node(self, NodeRecord node, vector[NodeRecord] &stk, list trees, SIZE_t bin_no):
         print("Node ID is", node.node_id)
         stk.pop_back()
-        cdef DOUBLE_t[:] value_array = trees[node.tree_id].value[node.node_id][0]/np.sum(trees[node.tree_id].value[node.node_id][0])
+
         if self._is_leaf(node, trees[node.tree_id]):
-            # dummy stmt
-            print("Going into leaf")
-            abc = 1
-            # Find max class in value
-            print("Shape of value array is ", trees[node.tree_id].value.shape)
-            node_class_label = np.argmax(trees[node.tree_id].value[node.node_id][0])
-            #TODO: Add a check in python funtion to make sure n_outputs = 1
-            # Second value in this is 0 for that reason
-            print("Array is ", trees[node.tree_id].value[node.node_id][0])
-            print("node class ", node_class_label)
-            # Link Parent to leaf class
-            self._link_parent_to_node(&self.node[bin_no][node.parent_id], self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + node_class_label, node)
-            # value_array = (trees[node.tree_id].value[node.node_id][0])/np.sum(trees[node.tree_id].value[node.node_id][0])
-            if node.node_type == IS_LEFT:
-                self.value[bin_no][node.parent_id][IS_LEFT] = value_array
-                print("Array after processing ", np.asarray(self.value[bin_no][node.parent_id][IS_LEFT]))
-            else:
-                self.value[bin_no][node.parent_id][IS_RIGHT] = value_array
-                print("Array after processing ", np.asarray(self.value[bin_no][node.parent_id][IS_RIGHT]))
-            # Increment working_index - NO NEED???
+            self._process_leaf_node(trees, node, bin_no)
 
         else:
             # dummy stmt
