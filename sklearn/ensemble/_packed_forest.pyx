@@ -120,6 +120,9 @@ cdef class PkdForest:
         # start from size of tree and add classes in bin array
         self._set_classes(trees, bin_no)
 
+        # Create a deque
+        cdef deque[NodeRecord] deq
+
         self.working_index[bin_no] = 0
         # set Roots in bin array
         # TODO: Add interleaving support
@@ -132,13 +135,13 @@ cdef class PkdForest:
             print(trees[j].feature)
             print(trees[j].threshold)
             print(trees[j].n_node_samples)
-            self._copy_node(&self.node[bin_no][self.working_index[bin_no]], trees[j], 0)
-            print(self.node[bin_no][self.working_index[bin_no]].left_child, trees[j].children_left[0])
-            self.working_index[bin_no] += 1
-
-        # Create a stack
-        cdef deque[NodeRecord] deq
-
+            # TODO 1: Change to push_back
+            deq.push_back(NodeRecord(j, 0, IS_ROOT, -1, 0))
+            print(trees[deq.back().tree_id].children_left[deq.back().node_id], trees[j].children_left[0])
+            #self._copy_node(&self.node[bin_no][self.working_index[bin_no]], trees[j], 0)
+            #print(self.node[bin_no][self.working_index[bin_no]].left_child, trees[j].children_left[0])
+            #self.working_index[bin_no] += 1
+        '''
         for j in range(self.bin_offsets[bin_no], self.bin_offsets[bin_no] + self.bin_sizes[bin_no]):
             # TODO: Put assertion back after completing while loop below
             assert deq.empty()
@@ -157,6 +160,15 @@ cdef class PkdForest:
             while not deq.empty():
                 self._process_node(deq.back(), deq, trees, bin_no)
                 # process it
+        '''
+
+        while not deq.empty():
+            if deq.front().depth > self.depth_interleaving:
+                print("Calling process node with False")
+                self._process_node(deq.front(), deq, trees, bin_no, False)
+            else:
+                print("Calling process node with True")
+                self._process_node(deq.front(), deq, trees, bin_no, True)
 
     # Copy node from tree
     cdef _copy_node(self, PkdNode* pkdNode, object tree, SIZE_t node_id):
@@ -193,6 +205,9 @@ cdef class PkdForest:
     cdef bint _is_left_child_larger(self, object tree, SIZE_t node_id):
         return tree.n_node_samples[tree.children_left[node_id]] > tree.n_node_samples[tree.children_right[node_id]]
 
+    cdef bint _is_root_node(self, NodeRecord &node):
+        return node.node_type == IS_ROOT
+
     cdef _process_leaf_node(self, list trees, NodeRecord &node, SIZE_t bin_no):
         print("Going into leaf")
 
@@ -200,13 +215,15 @@ cdef class PkdForest:
         print("Shape of value array is ", trees[node.tree_id].value.shape)
         node_class_label = np.argmax(trees[node.tree_id].value[node.node_id][0])
 
-        #TODO: Add a check in python function to make sure n_outputs = 1
+        # TODO: Add a check in python function to make sure n_outputs = 1
         # Second value in this is 0 for that reason
         print("Array is ", trees[node.tree_id].value[node.node_id][0])
         print("node class ", node_class_label)
 
         # Link Parent to leaf class
-        self._link_parent_to_node(&self.node[bin_no][node.parent_id], self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + node_class_label, node)
+        # TODO 2: Only link if not root
+        if not self._is_root_node(node):
+            self._link_parent_to_node(&self.node[bin_no][node.parent_id], self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + node_class_label, node)
 
         cdef DOUBLE_t[:] value_array = trees[node.tree_id].value[node.node_id][0]/np.sum(trees[node.tree_id].value[node.node_id][0])
 
@@ -218,40 +235,63 @@ cdef class PkdForest:
             print("Array after processing ", np.asarray(self.value[bin_no][node.parent_id][IS_RIGHT]))
         # Increment working_index - NO NEED???
 
-    cdef _process_internal_node(self, list trees, NodeRecord &node, SIZE_t bin_no, deque[NodeRecord] &deq):
+    cdef _process_internal_node(self, list trees, NodeRecord &node, SIZE_t bin_no, deque[NodeRecord] &deq, bint interleave):
         print("Going into non-leaf")
 
         # Copy processed node to bin
         self._copy_processed_node(&self.node[bin_no][self.working_index[bin_no]], node, self.working_index[bin_no], trees)
 
         # Link Parent to child
-        self._link_parent_to_node(&self.node[bin_no][node.parent_id], self.working_index[bin_no], node)
+        # TODO 2: Only link if not root
+        if not self._is_root_node(node):
+            self._link_parent_to_node(&self.node[bin_no][node.parent_id], self.working_index[bin_no], node)
 
+        # BEHAVIOR FOR interleave = False
         # create and push child nodes
-        if self._is_left_child_larger(trees[node.tree_id], node.node_id):
-            # Push right child, then left
-            print("Pushing left greater")
-            deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_right[node.node_id], IS_RIGHT, self.working_index[bin_no], node.depth + 1))
-            deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_left[node.node_id], IS_LEFT, self.working_index[bin_no], node.depth + 1))
+        if interleave == False:
+            if self._is_left_child_larger(trees[node.tree_id], node.node_id):
+                # Push right child, then left
+                print("Pushing left greater with interleave False")
+                deq.push_front(NodeRecord(node.tree_id, trees[node.tree_id].children_right[node.node_id], IS_RIGHT, self.working_index[bin_no], node.depth + 1))
+                deq.push_front(NodeRecord(node.tree_id, trees[node.tree_id].children_left[node.node_id], IS_LEFT, self.working_index[bin_no], node.depth + 1))
+            else:
+                # Push left child, then right
+                print("Pushing right greater with interleave False")
+                deq.push_front(NodeRecord(node.tree_id, trees[node.tree_id].children_left[node.node_id], IS_LEFT, self.working_index[bin_no], node.depth + 1))
+                deq.push_front(NodeRecord(node.tree_id, trees[node.tree_id].children_right[node.node_id], IS_RIGHT, self.working_index[bin_no], node.depth + 1))
+
         else:
-            # Push left child, then right
-            print("Pushing right greater")
-            deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_left[node.node_id], IS_LEFT, self.working_index[bin_no], node.depth + 1))
-            deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_right[node.node_id], IS_RIGHT, self.working_index[bin_no], node.depth + 1))
+            if node.depth == self.depth_interleaving:
+                # do stat, but still push back
+                if self._is_left_child_larger(trees[node.tree_id], node.node_id):
+                    # Push left child, then right
+                    print("Pushing left greater with node.depth = interleave depth")
+                    deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_left[node.node_id], IS_LEFT, self.working_index[bin_no], node.depth + 1))
+                    deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_right[node.node_id], IS_RIGHT, self.working_index[bin_no], node.depth + 1))
+                else:
+                    # Push right child, then left
+                    print("Pushing right greater with node.depth = interleave depth")
+                    deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_right[node.node_id], IS_RIGHT, self.working_index[bin_no], node.depth + 1))
+                    deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_left[node.node_id], IS_LEFT, self.working_index[bin_no], node.depth + 1))
+            else:
+                # push L, push R, at back
+                print("LR pushing wtih interleave True")
+                deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_left[node.node_id], IS_LEFT, self.working_index[bin_no], node.depth + 1))
+                deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_right[node.node_id], IS_RIGHT, self.working_index[bin_no], node.depth + 1))
 
         print(node.node_id, self.working_index[bin_no])
         # Increment working index
         self.working_index[bin_no] += 1
 
-    cdef _process_node(self, NodeRecord node, deque[NodeRecord] &deq, list trees, SIZE_t bin_no):
+    cdef _process_node(self, NodeRecord node, deque[NodeRecord] &deq, list trees, SIZE_t bin_no, bint interleave):
         print("Node ID is", node.node_id)
-        deq.pop_back()
+        deq.pop_front()
 
         if self._is_leaf(node, trees[node.tree_id]):
             self._process_leaf_node(trees, node, bin_no)
 
         else:
-            self._process_internal_node(trees, node, bin_no, deq)
+            self._process_internal_node(trees, node, bin_no, deq, interleave)
 
     cdef _set_classes(self, list trees, SIZE_t bin_no):
         print("Total nodes are ", self.n_nodes_per_bin[bin_no])

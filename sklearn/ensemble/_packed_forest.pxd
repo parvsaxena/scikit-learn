@@ -27,7 +27,7 @@ cdef struct NodeRecord:
     SIZE_t tree_id                          # tree_id in forest
     SIZE_t node_id                          # node_id in tree original Tree
     SIZE_t node_type                        # 0 = root, 1 = left, 2 = right
-    SIZE_t parent_id                        # position of parent in bin array
+    SIZE_t parent_id                        # position of parent in bin array, -1 for root node
     SIZE_t depth                            # depth of node in original Tree
 
 # TODO: Change the name
@@ -52,9 +52,10 @@ cdef class PkdForest:
     cdef bint _is_leaf(self, NodeRecord &node, object tree)
     cdef bint _is_class_node(self, PkdNode* pkdNode)
     cdef bint _is_internal_node(self, NodeRecord &node, object tree)
-    cdef _process_node(self, NodeRecord node, deque[NodeRecord] &deq, list trees, SIZE_t bin_no)
+    cdef bint _is_root_node(self, NodeRecord &node)
+    cdef _process_node(self, NodeRecord node, deque[NodeRecord] &deq, list trees, SIZE_t bin_no, bint interleave)
     cdef _process_leaf_node(self, list trees, NodeRecord &node, SIZE_t bin_no)
-    cdef _process_internal_node(self, list trees, NodeRecord &node, SIZE_t bin_no, deque[NodeRecord] &deq)
+    cdef _process_internal_node(self, list trees, NodeRecord &node, SIZE_t bin_no, deque[NodeRecord] &deq, bint interleave)
     cdef bint _is_left_child_larger(self, object tree, SIZE_t node_id)
     cdef _set_classes(self, list trees, SIZE_t bin_no)
     cdef _copy_processed_node(self, PkdNode *pkdNode, NodeRecord &node, SIZE_t working_index, list trees)
