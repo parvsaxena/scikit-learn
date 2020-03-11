@@ -8,6 +8,7 @@ from libc.string cimport memcpy
 from libc.string cimport memset
 from libc.stdint cimport SIZE_MAX
 from libcpp.vector cimport vector
+from libcpp.deque cimport deque
 
 import numpy as np
 cimport numpy as np
@@ -136,25 +137,25 @@ cdef class PkdForest:
             self.working_index[bin_no] += 1
 
         # Create a stack
-        cdef vector[NodeRecord] stk
+        cdef deque[NodeRecord] deq
 
         for j in range(self.bin_offsets[bin_no], self.bin_offsets[bin_no] + self.bin_sizes[bin_no]):
             # TODO: Put assertion back after completing while loop below
-            assert stk.empty()
+            assert deq.empty()
             # TODO: Assuming root can't be leaf node, crosscheck the assumption
             # Push left or right onto stack
             if self._is_left_child_larger(trees[j], 0):
                 # push right, then left
-                stk.push_back(NodeRecord(j, trees[j].children_right[0], IS_RIGHT, j - self.bin_offsets[bin_no], 1))
-                stk.push_back(NodeRecord(j, trees[j].children_left[0], IS_LEFT, j - self.bin_offsets[bin_no], 1))
+                deq.push_back(NodeRecord(j, trees[j].children_right[0], IS_RIGHT, j - self.bin_offsets[bin_no], 1))
+                deq.push_back(NodeRecord(j, trees[j].children_left[0], IS_LEFT, j - self.bin_offsets[bin_no], 1))
             else:
                 NodeRecord(j, trees[j].children_right[0], IS_RIGHT, j - self.bin_offsets[bin_no], 1)
-                stk.push_back(NodeRecord(j, trees[j].children_left[0], IS_LEFT, j - self.bin_offsets[bin_no], 1))
-                stk.push_back(NodeRecord(j, trees[j].children_right[0], IS_RIGHT, j - self.bin_offsets[bin_no], 1))
+                deq.push_back(NodeRecord(j, trees[j].children_left[0], IS_LEFT, j - self.bin_offsets[bin_no], 1))
+                deq.push_back(NodeRecord(j, trees[j].children_right[0], IS_RIGHT, j - self.bin_offsets[bin_no], 1))
 
-            # while stk not empty, keep going
-            while not stk.empty():
-                self._process_node(stk.back(), stk, trees, bin_no)
+            # while deq not empty, keep going
+            while not deq.empty():
+                self._process_node(deq.back(), deq, trees, bin_no)
                 # process it
 
     # Copy node from tree
@@ -217,7 +218,7 @@ cdef class PkdForest:
             print("Array after processing ", np.asarray(self.value[bin_no][node.parent_id][IS_RIGHT]))
         # Increment working_index - NO NEED???
 
-    cdef _process_internal_node(self, list trees, NodeRecord &node, SIZE_t bin_no, vector[NodeRecord] &stk):
+    cdef _process_internal_node(self, list trees, NodeRecord &node, SIZE_t bin_no, deque[NodeRecord] &deq):
         print("Going into non-leaf")
 
         # Copy processed node to bin
@@ -230,27 +231,27 @@ cdef class PkdForest:
         if self._is_left_child_larger(trees[node.tree_id], node.node_id):
             # Push right child, then left
             print("Pushing left greater")
-            stk.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_right[node.node_id], IS_RIGHT, self.working_index[bin_no], node.depth + 1))
-            stk.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_left[node.node_id], IS_LEFT, self.working_index[bin_no], node.depth + 1))
+            deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_right[node.node_id], IS_RIGHT, self.working_index[bin_no], node.depth + 1))
+            deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_left[node.node_id], IS_LEFT, self.working_index[bin_no], node.depth + 1))
         else:
             # Push left child, then right
             print("Pushing right greater")
-            stk.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_left[node.node_id], IS_LEFT, self.working_index[bin_no], node.depth + 1))
-            stk.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_right[node.node_id], IS_RIGHT, self.working_index[bin_no], node.depth + 1))
+            deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_left[node.node_id], IS_LEFT, self.working_index[bin_no], node.depth + 1))
+            deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_right[node.node_id], IS_RIGHT, self.working_index[bin_no], node.depth + 1))
 
         print(node.node_id, self.working_index[bin_no])
         # Increment working index
         self.working_index[bin_no] += 1
 
-    cdef _process_node(self, NodeRecord node, vector[NodeRecord] &stk, list trees, SIZE_t bin_no):
+    cdef _process_node(self, NodeRecord node, deque[NodeRecord] &deq, list trees, SIZE_t bin_no):
         print("Node ID is", node.node_id)
-        stk.pop_back()
+        deq.pop_back()
 
         if self._is_leaf(node, trees[node.tree_id]):
             self._process_leaf_node(trees, node, bin_no)
 
         else:
-            self._process_internal_node(trees, node, bin_no, stk)
+            self._process_internal_node(trees, node, bin_no, deq)
 
     cdef _set_classes(self, list trees, SIZE_t bin_no):
         print("Total nodes are ", self.n_nodes_per_bin[bin_no])
