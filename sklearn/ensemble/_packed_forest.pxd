@@ -32,7 +32,7 @@ cdef struct NodeRecord:
 
 # TODO: Change the name
 cdef class PkdForest:
-    cdef public SIZE_t n_bins               # No of bins
+    cdef SIZE_t n_bins               # No of bins
     cdef public SIZE_t n_trees              # Total no of trees in forest
     cdef public SIZE_t depth_interleaving   # Tree depth to interleave in bin
     cdef PkdNode** node                     # 2-D array of nodes, where first one is leaf
@@ -60,6 +60,6 @@ cdef class PkdForest:
     cdef _set_classes(self, list trees, SIZE_t bin_no)
     cdef _copy_processed_node(self, PkdNode *pkdNode, NodeRecord &node, SIZE_t working_index, list trees)
     cdef _link_parent_to_node(self, PkdNode *pkdNode_p, SIZE_t working_index, NodeRecord &node)
-    cpdef np.ndarray predict(self, object X, bint majority_vote)
+    cdef np.ndarray predict(self, np.ndarray X, bint majority_vote)
     cdef (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, object X)
     cdef SIZE_t _max_nodes_across_bin(self)

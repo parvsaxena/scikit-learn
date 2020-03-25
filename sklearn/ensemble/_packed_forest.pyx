@@ -1,6 +1,7 @@
 # distutils: language = c++
 from cpython cimport Py_INCREF, PyObject, PyTypeObject
 
+from libc.stdio cimport printf
 from libc.stdlib cimport free
 from libc.stdlib cimport malloc
 from libc.math cimport fabs
@@ -9,6 +10,9 @@ from libc.string cimport memset
 from libc.stdint cimport SIZE_MAX
 from libcpp.vector cimport vector
 from libcpp.deque cimport deque
+IF SKLEARN_OPENMP_PARALLELISM_ENABLED:
+    cimport openmp
+    from cython.parallel import parallel, prange
 
 import numpy as np
 cimport numpy as np
@@ -74,7 +78,7 @@ cdef class PkdForest:
         for i in range(0, self.n_bins):
             if self.n_nodes_per_bin[i] > max_nodes:
                 max_nodes = self.n_nodes_per_bin[i]
-        print("Max nodes across bins ", max_nodes)
+        # print("Max nodes across bins ", max_nodes)
         return max_nodes
 
     # Set bin sizes, and bin offset arrays
@@ -96,9 +100,9 @@ cdef class PkdForest:
             if i != 0:
                 self.bin_offsets[i] = self.bin_offsets[i-1] + self.bin_sizes[i-1]
 
-        for i in range(0, self.n_bins):
-            print("BIN SIZES, BIN_OFFSETS")
-            print(self.bin_sizes[i], self.bin_offsets[i])
+#        for i in range(0, self.n_bins):
+#            print("BIN SIZES, BIN_OFFSETS")
+#            print(self.bin_sizes[i], self.bin_offsets[i])
 
     # TODO: Add check to ensure no_of_unique_classes is same for all forest
     # set nodes_per_bin and
@@ -107,9 +111,9 @@ cdef class PkdForest:
         for j in range(self.bin_offsets[bin_no], self.bin_offsets[bin_no] + self.bin_sizes[bin_no]):
             self.n_nodes_per_bin[bin_no] += trees[j].node_count
 
-        print("Without classes", self.n_nodes_per_bin[bin_no])
+        # print("Without classes", self.n_nodes_per_bin[bin_no])
         self.n_nodes_per_bin[bin_no] += trees[self.bin_offsets[bin_no]].max_n_classes
-        print("After adding classes", self.n_nodes_per_bin[bin_no])
+        # print("After adding classes", self.n_nodes_per_bin[bin_no])
 
     cdef _create_bin(self, list trees, SIZE_t bin_no) except +:
         self.node[bin_no] = <PkdNode*>malloc(self.n_nodes_per_bin[bin_no] * sizeof(PkdNode))
@@ -126,15 +130,15 @@ cdef class PkdForest:
         self.working_index[bin_no] = 0
         # set Roots in bin array
         # TODO: Add interleaving support
-        print("Copy function comparison")
+        #print("Copy function comparison")
         for j in range(self.bin_offsets[bin_no], self.bin_offsets[bin_no] + self.bin_sizes[bin_no]):
             #print(trees[j].node_array)
-            print("Trees")
-            print(trees[j].children_right)
-            print(trees[j].children_left)
-            print(trees[j].feature)
-            print(trees[j].threshold)
-            print(trees[j].n_node_samples)
+            #print("Trees")
+            #print(trees[j].children_right)
+            #print(trees[j].children_left)
+            #print(trees[j].feature)
+            #print(trees[j].threshold)
+            #print(trees[j].n_node_samples)
             # TODO 1: Change to push_back
             deq.push_back(NodeRecord(j, 0, IS_ROOT, -1, 0))
             print(trees[deq.back().tree_id].children_left[deq.back().node_id], trees[j].children_left[0])
@@ -164,10 +168,10 @@ cdef class PkdForest:
 
         while not deq.empty():
             if deq.front().depth > self.depth_interleaving:
-                print("Calling process node with False")
+                #print("Calling process node with False")
                 self._process_node(deq.front(), deq, trees, bin_no, False)
             else:
-                print("Calling process node with True")
+                #print("Calling process node with True")
                 self._process_node(deq.front(), deq, trees, bin_no, True)
 
     # Copy node from tree
@@ -209,16 +213,16 @@ cdef class PkdForest:
         return node.node_type == IS_ROOT
 
     cdef _process_leaf_node(self, list trees, NodeRecord &node, SIZE_t bin_no):
-        print("Going into leaf")
+        #print("Going into leaf")
 
         # Find max class in value
-        print("Shape of value array is ", trees[node.tree_id].value.shape)
+        #print("Shape of value array is ", trees[node.tree_id].value.shape)
         node_class_label = np.argmax(trees[node.tree_id].value[node.node_id][0])
 
         # TODO: Add a check in python function to make sure n_outputs = 1
         # Second value in this is 0 for that reason
-        print("Array is ", trees[node.tree_id].value[node.node_id][0])
-        print("node class ", node_class_label)
+        #print("Array is ", trees[node.tree_id].value[node.node_id][0])
+        #print("node class ", node_class_label)
 
         # Link Parent to leaf class
         # TODO 2: Only link if not root
@@ -229,14 +233,14 @@ cdef class PkdForest:
 
         if node.node_type == IS_LEFT:
             self.value[bin_no][node.parent_id][IS_LEFT] = value_array
-            print("Array after processing ", np.asarray(self.value[bin_no][node.parent_id][IS_LEFT]))
+            #print("Array after processing ", np.asarray(self.value[bin_no][node.parent_id][IS_LEFT]))
         else:
             self.value[bin_no][node.parent_id][IS_RIGHT] = value_array
-            print("Array after processing ", np.asarray(self.value[bin_no][node.parent_id][IS_RIGHT]))
+            #print("Array after processing ", np.asarray(self.value[bin_no][node.parent_id][IS_RIGHT]))
         # Increment working_index - NO NEED???
 
     cdef _process_internal_node(self, list trees, NodeRecord &node, SIZE_t bin_no, deque[NodeRecord] &deq, bint interleave):
-        print("Going into non-leaf")
+        #print("Going into non-leaf")
 
         # Copy processed node to bin
         self._copy_processed_node(&self.node[bin_no][self.working_index[bin_no]], node, self.working_index[bin_no], trees)
@@ -251,12 +255,12 @@ cdef class PkdForest:
         if interleave == False:
             if self._is_left_child_larger(trees[node.tree_id], node.node_id):
                 # Push right child, then left
-                print("Pushing left greater with interleave False")
+                # print("Pushing left greater with interleave False")
                 deq.push_front(NodeRecord(node.tree_id, trees[node.tree_id].children_right[node.node_id], IS_RIGHT, self.working_index[bin_no], node.depth + 1))
                 deq.push_front(NodeRecord(node.tree_id, trees[node.tree_id].children_left[node.node_id], IS_LEFT, self.working_index[bin_no], node.depth + 1))
             else:
                 # Push left child, then right
-                print("Pushing right greater with interleave False")
+                # print("Pushing right greater with interleave False")
                 deq.push_front(NodeRecord(node.tree_id, trees[node.tree_id].children_left[node.node_id], IS_LEFT, self.working_index[bin_no], node.depth + 1))
                 deq.push_front(NodeRecord(node.tree_id, trees[node.tree_id].children_right[node.node_id], IS_RIGHT, self.working_index[bin_no], node.depth + 1))
 
@@ -265,26 +269,26 @@ cdef class PkdForest:
                 # do stat, but still push back
                 if self._is_left_child_larger(trees[node.tree_id], node.node_id):
                     # Push left child, then right
-                    print("Pushing left greater with node.depth = interleave depth")
+                    # print("Pushing left greater with node.depth = interleave depth")
                     deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_left[node.node_id], IS_LEFT, self.working_index[bin_no], node.depth + 1))
                     deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_right[node.node_id], IS_RIGHT, self.working_index[bin_no], node.depth + 1))
                 else:
                     # Push right child, then left
-                    print("Pushing right greater with node.depth = interleave depth")
+                    # print("Pushing right greater with node.depth = interleave depth")
                     deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_right[node.node_id], IS_RIGHT, self.working_index[bin_no], node.depth + 1))
                     deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_left[node.node_id], IS_LEFT, self.working_index[bin_no], node.depth + 1))
             else:
                 # push L, push R, at back
-                print("LR pushing wtih interleave True")
+                # print("LR pushing wtih interleave True")
                 deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_left[node.node_id], IS_LEFT, self.working_index[bin_no], node.depth + 1))
                 deq.push_back(NodeRecord(node.tree_id, trees[node.tree_id].children_right[node.node_id], IS_RIGHT, self.working_index[bin_no], node.depth + 1))
 
-        print(node.node_id, self.working_index[bin_no])
+        # print(node.node_id, self.working_index[bin_no])
         # Increment working index
         self.working_index[bin_no] += 1
 
     cdef _process_node(self, NodeRecord node, deque[NodeRecord] &deq, list trees, SIZE_t bin_no, bint interleave):
-        print("Node ID is", node.node_id)
+        # print("Node ID is", node.node_id)
         deq.pop_front()
 
         if self._is_leaf(node, trees[node.tree_id]):
@@ -294,77 +298,44 @@ cdef class PkdForest:
             self._process_internal_node(trees, node, bin_no, deq, interleave)
 
     cdef _set_classes(self, list trees, SIZE_t bin_no):
-        print("Total nodes are ", self.n_nodes_per_bin[bin_no])
-        print("No nodes w/o classes are ", self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes)
-        print("Total classes are", trees[self.bin_offsets[bin_no]].max_n_classes)
+        # print("Total nodes are ", self.n_nodes_per_bin[bin_no])
+        # print("No nodes w/o classes are ", self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes)
+        # print("Total classes are", trees[self.bin_offsets[bin_no]].max_n_classes)
         for i in range(0, trees[self.bin_offsets[bin_no]].max_n_classes):
             self.node[bin_no][self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + i].left_child = _TREE_LEAF
             self.node[bin_no][self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + i].right_child = i
             self.node[bin_no][self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + i].feature = _TREE_UNDEFINED
             self.node[bin_no][self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + i].threshold = _TREE_UNDEFINED
-            print("node no ", self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + i)
-            print("was assigned ", i)
+            # print("node no ", self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + i)
+            # print("was assigned ", i)
 
-    cpdef np.ndarray predict(self, object X, bint majority_vote):
+    cdef np.ndarray predict(self, np.ndarray X_ndarray, bint majority_vote):
+
+        # Convert python object X to memory view
+        cdef const DTYPE_t[:, :] X = X_ndarray
+
         # Create loop for all observations
         # TODO: NOTE, max_n_classes no assigned any value in code
         cdef SIZE_t[:,:] predict_array = np.zeros(shape=(X.shape[0], self.n_trees), dtype=np.intp)
         cdef DOUBLE_t[:,:,:] predict_matrix = np.zeros(shape=(X.shape[0], self.n_trees, self.max_n_classes), dtype=np.float64)
         # see bin size of 1st bin as it will be maximum, and differ by 1 tree from others(at max)
         cdef SIZE_t[:,:] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.intp)
-        print("Curr_node shape is", curr_node.shape, curr_node.ndim)
-        print("Predict shape is", predict_array.shape, predict_array.ndim)
+        # print("Curr_node shape is", curr_node.shape, curr_node.ndim)
+        # print("Predict shape is", predict_array.shape, predict_array.ndim)
         # TODO: Add parallel support here
 
-        for obs_no in range(0, X.shape[0]):
-            print("observation no ", obs_no)
-            print("observation is ", X[obs_no])
-            for bin_no in range(0, self.n_bins):
-                print("STarting code for bin no", bin_no)
-
-                # Initialize to tree roots in the bins
-                for tree_no in range(0, self.bin_sizes[bin_no]):
-                    curr_node[bin_no][tree_no] = tree_no
-
-                print("Curr node after initialization is", np.asarray(curr_node[bin_no,:]))
-
-                internal_nodes_reached = self.bin_sizes[bin_no]
-                while internal_nodes_reached > 0:
-                    internal_nodes_reached = 0
-                    print("Curr node after initialization is ", np.asarray(curr_node[bin_no,:]))
-                    for tree_no in range(0, self.bin_sizes[bin_no]):
-                        print("Tree no", tree_no)
-                        print("Printing node", self.node[bin_no][curr_node[bin_no][tree_no]])
-                        if not self._is_class_node(&self.node[bin_no][curr_node[bin_no][tree_no]]):
-                            next_node, child = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
-                            if self._is_class_node(&self.node[bin_no][next_node]):
-                                print("Class node found!!")
-                                predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]]= self.value[bin_no][curr_node[bin_no][tree_no]][child]
-                                print("Writing for original tree no ", tree_no + self.bin_offsets[bin_no])
-                            curr_node[bin_no,tree_no] = next_node
-                            print("Next node and child are", next_node, child)
-                            print("Predict matrix here is ", np.asarray(predict_matrix[obs_no,tree_no + self.bin_offsets[bin_no]]))
-                            internal_nodes_reached += 1
-                            print("current node now is", curr_node[bin_no,tree_no])
-
-                # time to predict classes
-                for tree_no in range(0, self.bin_sizes[bin_no]):
-                    predict_array[obs_no, self.bin_offsets[bin_no] + tree_no] = self.node[bin_no][curr_node[bin_no,tree_no]].right_child
+        cdef SIZE_t i = 1
+        #for bin_no in prange(self.n_bins, nogil = True, schedule = 'static'):
+        for i in prange(0, 6, nogil=True):
+            #print("STarting code for bin no", bin_no)
+            # abc = 3
+            #printf("%d\n", abc)
 
 
-            print("Prediction internally is", np.asarray(predict_array[obs_no,:]))
 
-        if majority_vote == False:
-            # prediction by average
-            print("Avg probabilities are")
-            array = np.mean(predict_matrix, axis=1)
-            for i in range(0, array.shape[0]):
-                print("Before avg is", i, np.asarray(predict_matrix[i]))
-                print("Average prediction", i, array[i])
+            #print("Prediction internally is", np.asarray(predict_array[obs_no,:]))
 
-            return array
-        else:
-            return np.asarray(predict_array, dtype = np.intp)
+
 
     cdef bint _is_class_node(self, PkdNode* pkdNode):
         return pkdNode.left_child == TREE_LEAF
