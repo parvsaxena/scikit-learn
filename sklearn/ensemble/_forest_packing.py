@@ -34,30 +34,30 @@ class PackedForest:
         self.interleave_depth = interleave_depth
         self.n_bins = n_bins
         self.forest_classifier = forest_classifier
-        print(forest_classifier.estimators_)
+        # print(forest_classifier.estimators_)
         self.n_trees = forest_classifier.n_estimators
         self.tree_list = forest_classifier.estimators_
-        for tree in self.tree_list:
-            print(tree.tree_.node_count, tree.tree_.capacity)
-        print(self.tree_list)
+        # for tree in self.tree_list:
+        #     print(tree.tree_.node_count, tree.tree_.capacity)
+        # print(self.tree_list)
 
         self._pkd_forest = PkdForest([tree.tree_ for tree in self.tree_list],
                                      self.n_bins,
                                      self.interleave_depth)
 
-    def predict(self, X, majority_vote=False):
+    def predict(self, X, majority_vote=False, n_threads=8):
 
-        print("LET US BEGIN THE GAME")
+        # print("LET US BEGIN THE GAME")
 
-        for i in range(0, len(self.tree_list)):
-            print("Prediction for tree", i, "original was")
-            prediction = self.tree_list[i].tree_.predict(np.asarray(X, dtype=np.float32))
-            for j in range(0, prediction.shape[0]):
-                print("the orig prediction", j, prediction[j])
+        # for i in range(0, len(self.tree_list)):
+        #     print("Prediction for tree", i, "original was")
+        #     prediction = self.tree_list[i].tree_.predict(np.asarray(X, dtype=np.float32))
+        #     # for j in range(0, prediction.shape[0]):
+        #     #     print("the orig prediction", j, prediction[j])
 
-        print("LET US END THE GAME")
-        print("Shape is", X.shape)
-        outputs = self._pkd_forest.predict(X, majority_vote)
+        # print("LET US END THE GAME")
+        # print("Shape is", X.shape)
+        outputs = self._pkd_forest.predict(X, majority_vote, n_threads)
         if majority_vote:
             for i in range(0, outputs.shape[0]):
                 print("OUTPUT IS", outputs[i])

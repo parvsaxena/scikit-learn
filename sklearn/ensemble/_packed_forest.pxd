@@ -50,7 +50,7 @@ cdef class PkdForest:
     cdef _create_bin(self, list trees, SIZE_t bin_no) except +
     cdef _copy_node(self, PkdNode* pkdNode, object node, SIZE_t node_id)
     cdef bint _is_leaf(self, NodeRecord &node, object tree)
-    cdef bint _is_class_node(self, PkdNode* pkdNode)
+    cdef bint _is_class_node(self, PkdNode* pkdNode) nogil
     cdef bint _is_internal_node(self, NodeRecord &node, object tree)
     cdef bint _is_root_node(self, NodeRecord &node)
     cdef _process_node(self, NodeRecord node, deque[NodeRecord] &deq, list trees, SIZE_t bin_no, bint interleave)
@@ -60,6 +60,6 @@ cdef class PkdForest:
     cdef _set_classes(self, list trees, SIZE_t bin_no)
     cdef _copy_processed_node(self, PkdNode *pkdNode, NodeRecord &node, SIZE_t working_index, list trees)
     cdef _link_parent_to_node(self, PkdNode *pkdNode_p, SIZE_t working_index, NodeRecord &node)
-    cpdef np.ndarray predict(self, object X, bint majority_vote)
-    cdef (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, object X)
+    cpdef np.ndarray predict(self, object X, bint majority_vote, SIZE_t n_threads)
+    cdef (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, const DOUBLE_t[:,:] X) nogil
     cdef SIZE_t _max_nodes_across_bin(self)

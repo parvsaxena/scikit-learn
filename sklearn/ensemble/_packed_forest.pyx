@@ -9,6 +9,9 @@ from libc.string cimport memset
 from libc.stdint cimport SIZE_MAX
 from libcpp.vector cimport vector
 from libcpp.deque cimport deque
+from cython.parallel import prange
+IF SKLEARN_OPENMP_PARALLELISM_ENABLED:
+    cimport openmp
 
 import numpy as np
 cimport numpy as np
@@ -305,7 +308,11 @@ cdef class PkdForest:
             # print("node no ", self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + i)
             # print("was assigned ", i)
 
-    cpdef np.ndarray predict(self, object X, bint majority_vote):
+    cpdef np.ndarray predict(self, object X_ndarray, bint majority_vote, SIZE_t n_threads):
+        cdef const DOUBLE_t[:, :] X = X_ndarray
+        # IF SKLEARN_OPENMP_PARALLELISM_ENABLED:
+        #     print(openmp.omp_get_max_threads())
+
         # Create loop for all observations
         # TODO: NOTE, max_n_classes no assigned any value in code
         cdef SIZE_t[:,:] predict_array = np.zeros(shape=(X.shape[0], self.n_trees), dtype=np.intp)
@@ -316,11 +323,17 @@ cdef class PkdForest:
         # print("Predict shape is", predict_array.shape, predict_array.ndim)
         # TODO: Add parallel support here
 
-        for obs_no in range(0, X.shape[0]):
-            # print("observation no ", obs_no)
-            # print("observation is ", X[obs_no])
-            for bin_no in range(0, self.n_bins):
-                # print("STarting code for bin no", bin_no)
+        cdef:
+            SIZE_t bin_no, obs_no, tree_no
+            SIZE_t internal_nodes_reached
+            SIZE_t next_node, child
+
+        for bin_no in prange(0, self.n_bins, nogil=True, schedule='static', num_threads = n_threads):
+            # print("STarting code for bin no", bin_no)
+
+            for obs_no in range(0, X.shape[0]):
+                # print("observation no ", obs_no)
+                # print("observation is ", X[obs_no])
 
                 # Initialize to tree roots in the bins
                 for tree_no in range(0, self.bin_sizes[bin_no]):
@@ -344,12 +357,13 @@ cdef class PkdForest:
                             curr_node[bin_no,tree_no] = next_node
                             # print("Next node and child are", next_node, child)
                             # print("Predict matrix here is ", np.asarray(predict_matrix[obs_no,tree_no + self.bin_offsets[bin_no]]))
-                            internal_nodes_reached += 1
+                            internal_nodes_reached = internal_nodes_reached + 1
                             # print("current node now is", curr_node[bin_no,tree_no])
 
                 # time to predict classes
-                for tree_no in range(0, self.bin_sizes[bin_no]):
-                    predict_array[obs_no, self.bin_offsets[bin_no] + tree_no] = self.node[bin_no][curr_node[bin_no,tree_no]].right_child
+                if majority_vote == True:
+                    for tree_no in range(0, self.bin_sizes[bin_no]):
+                        predict_array[obs_no, self.bin_offsets[bin_no] + tree_no] = self.node[bin_no][curr_node[bin_no,tree_no]].right_child
 
 
             # print("Prediction internally is", np.asarray(predict_array[obs_no,:]))
@@ -366,11 +380,11 @@ cdef class PkdForest:
         else:
             return np.asarray(predict_array, dtype = np.intp)
 
-    cdef bint _is_class_node(self, PkdNode* pkdNode):
-        return pkdNode.left_child == TREE_LEAF
+    cdef bint _is_class_node(self, PkdNode* pkdNode) nogil:
+        return pkdNode.left_child == _TREE_LEAF
 
     # TODO: Avoid passing object X, pass reference
-    cdef (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, object X):
+    cdef (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, const DOUBLE_t[:,:] X) nogil:
         # TODO: Make sure this pkdNode is not class node
         if(X[obs_no][pkdNode.feature] <= pkdNode.threshold):
             return pkdNode.left_child, IS_LEFT
