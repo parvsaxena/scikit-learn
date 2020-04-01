@@ -9,6 +9,8 @@ from datetime import datetime
 import treelite.gallery.sklearn
 import treelite.runtime     # runtime module
 import compiledtrees
+from test_treelite import load_csv, dataset_path
+
 custom_data_home = '.'
 toolchain = 'gcc'
 
@@ -28,7 +30,7 @@ def benchmark_cifar_small(n_estimators = 2048, interleave_depth = 2, batch_size 
 
     print(X_train.shape, X_test.shape, Y_train.shape, Y_test.shape)
 
-    clf = RandomForestClassifier(n_estimators=n_estimators, random_state = int(sys.argv[1]))
+    clf = RandomForestClassifier(n_estimators=n_estimators, random_state=int(sys.argv[1]))
     print("Fitting")
     clf.fit(X_train, Y_train)
 
@@ -75,20 +77,27 @@ def benchmark_higgs(n_estimators = 2048, interleave_depth = 2, batch_size = 1, n
 
 def benchmark_cifar10(n_estimators = 2048, interleave_depth = 2, batch_size = 1, n_threads = 8):
     print("Fetching cifar")
-    cifar = fetch_openml('stl-10')
-    print(cifar.data.shape)
-    print(cifar.target.shape)
-
-    X = cifar.data[:30000, :10]
-    Y = cifar.target[:30000]
+    # cifar = fetch_openml('stl-10')
+    # print(cifar.data.shape)
+    # print(cifar.target.shape)
+    #
+    # X = cifar.data[:30000, :10]
+    # Y = cifar.target[:30000]
+    X, Y = load_csv(dataset_path)
+    X = np.asarray(X)
+    Y = np.asarray(Y)
+    print(type(X), type(Y))
+    print(len(X[0]))
+    print(len(X), len(Y))
     print(X.dtype, Y.dtype)
     print(X.shape, Y.shape)
+    print(Y[0])
 
-    X_train = X[:3000]
-    X_test = X[3000:]
+    X_train = X[:50000]
+    X_test = X[50000:]
 
-    Y_train = Y[:3000]
-    Y_test = Y[3000:]
+    Y_train = Y[:50000]
+    Y_test = Y[50000:]
 
     print(X_train.shape, X_test.shape, Y_train.shape, Y_test.shape)
     # X = np.asarray(higgs.data[:, :20], dtype=np.float32)
@@ -100,9 +109,9 @@ def benchmark_cifar10(n_estimators = 2048, interleave_depth = 2, batch_size = 1,
     print("Classifier order is", clf.estimators_[0].classes_)
     # sklearn_naive(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
-    packed_forest(clf=clf, X_test=X_test, Y_test=Y_test,  interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+    # packed_forest(clf=clf, X_test=X_test, Y_test=Y_test,  interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
-    #tree_lite(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+    tree_lite(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
     # compiled_trees(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
@@ -127,14 +136,14 @@ def benchmark_mnist(n_estimators = 2048, interleave_depth = 2, batch_size = 1, n
     print(X.shape, Y.shape)
     print(X_train.shape, X_test.shape, Y_train.shape, Y_test.shape)
 
-    clf = RandomForestClassifier(n_estimators=n_estimators, max_depth=1)
+    clf = RandomForestClassifier(n_estimators=n_estimators)
     print("Fitting")
     clf.fit(X_train, Y_train)
     print("Classifier order is", clf.estimators_[0].classes_)
 
     sklearn_naive(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
-    packed_forest(clf=clf, X_test=X_test, Y_test=Y_test,  interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+    # packed_forest(clf=clf, X_test=X_test, Y_test=Y_test,  interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
     # tree_lite(clf=clf, X_test=X_test, Y_test=Y_test,  interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
@@ -145,8 +154,8 @@ def compiled_trees(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_thre
     print("Starting compiled trees")
     compiled_predictor = compiledtrees.CompiledRegressionPredictor(clf)
 
-    batches = [batch_size]
-    # batches = [10000, 5000, 1000, 500, 100, 10, 1]
+    # batches = [batch_size]
+    batches = [10000, 5000, 1000, 500, 100, 10, 1]
     for batch_size in batches:
         compiled_trees_lst = []
         runs = (int)(Y_test.shape[0]/batch_size)
@@ -168,7 +177,7 @@ def compiled_trees(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_thre
     b = compiled_predictor.predict(X_test)
 
     b = np.asarray(b, np.int)
-    b = list(map(str, b))
+    # b = list(map(str, b))
     # print(a[:100])
     # print(b[:100])
     print(np.sum(np.equal(a, b)))
@@ -197,6 +206,7 @@ def sklearn_naive(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
 
 
 def packed_forest(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8):
+    # batches = [batch_size]
     batches = [10000, 5000, 1000, 500, 100, 10, 1]
     frst = PackedForest(forest_classifier=clf, interleave_depth=interleave_depth, n_bins=8)
     for batch_size in batches:
@@ -219,8 +229,8 @@ def packed_forest(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
     # print("Predicting")
     a = clf.predict(X_test)
     print(a[:5])
-    # b = frst.predict(X_test)
-    b = list(map(str, np.asarray(frst.predict(X_test), dtype=np.int)))
+    b = frst.predict(X_test)
+    # b = list(map(str, np.asarray(frst.predict(X_test), dtype=np.int)))
     print(b[:5])
 
     print("a vs b")
@@ -274,9 +284,9 @@ def tree_lite(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8
 
 
 if __name__ == "__main__":
-    benchmark_mnist(n_estimators=10, interleave_depth=2, batch_size=10000, n_threads=8)
+    # benchmark_mnist(n_estimators=128, interleave_depth=2, batch_size=10000, n_threads=8)
 
-    # benchmark_cifar10(n_estimators=10, interleave_depth=2, batch_size=1000, n_threads=8)
+    benchmark_cifar10(n_estimators=10, interleave_depth=2, batch_size=1000, n_threads=8)
 
     # benchmark_higgs(n_estimators=1, interleave_depth=2, batch_size=1, n_threads=8)
 
