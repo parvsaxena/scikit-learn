@@ -13,7 +13,9 @@ def configuration(parent_package="", top_path=None):
     config.add_extension("_packed_forest",
                          sources=["_packed_forest.pyx"],
                          include_dirs=[numpy.get_include()],
-                         language="c++")
+                         language="c++",
+                         extra_compile_args=['-fopenmp', '-O3', '-ffast-math'],
+                         extra_link_args=['-fopenmp'],)
 
     config.add_subpackage("tests")
 
