@@ -119,7 +119,7 @@ def benchmark_cifar10(n_estimators = 2048, interleave_depth = 2, batch_size = 1,
     clf.fit(X_train, Y_train)
     print("Classifier order is", clf.estimators_[0].classes_)
 
-    # sklearn_naive(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+    sklearn_naive(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
     packed_forest(clf=clf, X_test=X_test, Y_test=Y_test,  interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
