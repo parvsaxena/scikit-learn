@@ -166,12 +166,14 @@ def benchmark_mnist(n_estimators = 2048, interleave_depth = 2, batch_size = 1, n
 def compiled_trees(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8):
     print("Calling compiled trees")
     # batches = [batch_size]
-    # batches = [10000, 5000, 1000, 500]
-    batches = [10000, 5000, 1000, 500, 100, 10, 1]
+    batches = [1, 10, 100]
+    # batches = [10000, 5000, 1000, 500, 100, 10, 1]
     arr = np.empty(shape=(int)(cache_size/4), dtype=np.float32)  # 4bytes for n.float32
 
     # Shuffle dataset
     X_test, Y_test = shuffle(X_test, Y_test)
+    X_test = X_test[:1000]
+    Y_test = Y_test[:1000]
 
     # Compiling time
     tstart = datetime.now()
@@ -217,12 +219,15 @@ def compiled_trees(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_thre
     # print(np.sum(np.equal(Y_test, b)))
 
 def sklearn_naive(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8):
-    # batches = [10000, 5000, 1000, 500]
-    batches = [10000, 5000, 1000, 500, 100, 10, 1]
+    batches = [1, 10, 100]
+    # batches = [10000, 5000, 1000, 500, 100, 10, 1]
     arr = np.empty(shape=(int)(cache_size/4), dtype=np.float32)  # 4bytes for n.float32
 
     # Shuffle dataset
     X_test, Y_test = shuffle(X_test, Y_test)
+
+    X_test = X_test[:1000]
+    Y_test = Y_test[:1000]
 
     print("--------------------------")
     for batch_size in batches:
@@ -251,12 +256,14 @@ def sklearn_naive(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
 def packed_forest(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8):
     print("Calling PackedForest")
     # batches = [batch_size]
-    # batches = [10000, 5000, 1000, 500]
-    batches = [10000, 5000, 1000, 500, 100, 10, 1]
+    batches = [1, 10, 100]
+    # batches = [10000, 5000, 1000, 500, 100, 10, 1]
     arr = np.empty(shape=(int)(cache_size/4), dtype=np.float32)  # 4bytes for n.float32
 
     # Shuffle dataset
     X_test, Y_test = shuffle(X_test, Y_test)
+    X_test = X_test[:1000]
+    Y_test = Y_test[:1000]
 
     # Packing time
     tstart = datetime.now()
@@ -308,13 +315,14 @@ def packed_forest(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
 def tree_lite(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8):
     print("Calling treelite")
     # batches = [batch_size]
-    # batches = [10000, 5000, 1000, 500]
-    batches = [10000, 5000, 1000, 500, 100, 10, 1]
+    batches = [1, 10, 100]
+    # batches = [10000, 5000, 1000, 500, 100, 10, 1]
     arr = np.empty(shape=(int)(cache_size/4), dtype=np.float32)  # 4bytes for n.float32
 
     # Shuffle dataset
     X_test, Y_test = shuffle(X_test, Y_test)
-
+    X_test = X_test[:1000]
+    Y_test = Y_test[:1000]
 
     # Packing time
     tstart = datetime.now()
@@ -350,7 +358,7 @@ def tree_lite(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8
                 batch = treelite.runtime.Batch.from_npy2d(X_test, rbegin=i, rend=(i+1)*batch_size)
                 tstart = datetime.now()
                 predictor.predict(batch)
-                delta = (datetime.now() - tstart)
+                delta = (datetime.now() - tstart).total_seconds()*1000
                 treelite_lst.append(delta)
 
             op_time = reduce(add, treelite_lst) / Y_test.shape[0]
