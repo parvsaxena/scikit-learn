@@ -9,6 +9,58 @@ num_trees = 128
 dataset_path = 'cifar-10.csv'
 toolchain = 'gcc'
 
+def process_tree(sklearn_tree, sklearn_model):
+  treelite_tree = treelite.ModelBuilder.Tree()
+  # Node #0 is always root for scikit-learn decision trees
+  treelite_tree[0].set_root()
+
+  # Iterate over each node: node ID ranges from 0 to [node_count]-1
+  for node_id in range(sklearn_tree.node_count):
+    process_node(treelite_tree, sklearn_tree, node_id, sklearn_model)
+
+  return treelite_tree
+
+
+def process_test_node(treelite_tree, sklearn_tree, node_id, sklearn_model):
+  # Initialize the test node with given node ID
+  treelite_tree[node_id].set_numerical_test_node(
+                        feature_id=sklearn_tree.feature[node_id],
+                        opname='<=',
+                        threshold=sklearn_tree.threshold[node_id],
+                        default_left=True,
+                        left_child_key=sklearn_tree.children_left[node_id],
+                        right_child_key=sklearn_tree.children_right[node_id])
+
+
+def process_model(sklearn_model):
+  # Must specify num_output_group and pred_transform
+  builder = treelite.ModelBuilder(num_feature=sklearn_model.n_features_,
+                                  num_output_group=sklearn_model.n_classes_,
+                                  random_forest=True,
+                                  pred_transform='identity_multiclass')
+  for i in range(sklearn_model.n_estimators):
+    # Process i-th tree and add to the builder
+    builder.append( process_tree(sklearn_model.estimators_[i].tree_,
+                                 sklearn_model) )
+
+  return builder.commit()
+
+
+def process_node(treelite_tree, sklearn_tree, node_id, sklearn_model):
+  if sklearn_tree.children_left[node_id] == -1:  # leaf node
+    process_leaf_node(treelite_tree, sklearn_tree, node_id, sklearn_model)
+  else:                                          # test node
+    process_test_node(treelite_tree, sklearn_tree, node_id, sklearn_model)
+
+
+def process_leaf_node(treelite_tree, sklearn_tree, node_id, sklearn_model):
+  # Get counts for each label class at this leaf node
+  leaf_count = sklearn_tree.value[node_id].squeeze()
+  # Compute the probability distribution over label classes
+  prob_distribution = leaf_count / leaf_count.sum()
+  # The leaf output is the probability distribution
+  treelite_tree[node_id].set_leaf_node(prob_distribution)
+
 def load_csv(filename):
     """
     Loads a csv file containin the data, parses it
