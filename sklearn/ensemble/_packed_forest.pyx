@@ -349,21 +349,22 @@ cdef class PkdForest:
                         # print("Tree no", tree_no)
                         # print("Printing node", self.node[bin_no][curr_node[bin_no][tree_no]])
                         if not self._is_class_node(&self.node[bin_no][curr_node[bin_no][tree_no]]):
-                            next_node, child = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
+                            # next_node, child = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
                             # if self._is_class_node(&self.node[bin_no][next_node]):
                                 # print("Class node found!!")
                                 # predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]]= self.value[bin_no][curr_node[bin_no][tree_no]][child]
                                 # print("Writing for original tree no ", tree_no + self.bin_offsets[bin_no])
-                            curr_node[bin_no,tree_no] = next_node
+                            curr_node[bin_no,tree_no], child  = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
+
                             # print("Next node and child are", next_node, child)
                             # print("Predict matrix here is ", np.asarray(predict_matrix[obs_no,tree_no + self.bin_offsets[bin_no]]))
                             internal_nodes_reached = internal_nodes_reached + 1
                             # print("current node now is", curr_node[bin_no,tree_no])
 
                 # time to predict classes
-                if majority_vote == True:
-                    for tree_no in range(0, self.bin_sizes[bin_no]):
-                        predict_array[obs_no, self.bin_offsets[bin_no] + tree_no] = self.node[bin_no][curr_node[bin_no,tree_no]].right_child
+                # if majority_vote == True:
+                for tree_no in range(0, self.bin_sizes[bin_no]):
+                    predict_array[obs_no, self.bin_offsets[bin_no] + tree_no] = self.node[bin_no][curr_node[bin_no,tree_no]].right_child
 
 
             # print("Prediction internally is", np.asarray(predict_array[obs_no,:]))

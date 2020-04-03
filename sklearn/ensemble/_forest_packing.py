@@ -66,8 +66,8 @@ class PackedForest:
         # print("Shape is", X.shape)
         outputs = self._pkd_forest.predict(X, majority_vote, n_threads)
         if majority_vote:
-            for i in range(0, outputs.shape[0]):
-                print("OUTPUT IS", outputs[i])
+            # for i in range(0, outputs.shape[0]):
+            #     print("OUTPUT IS", outputs[i])
             # return self.forest_classifier.estimators_[0].classes_.take(np.max(outputs, axis=1), axis=0)
             # return np.argmax(np.bincount(outputs, axis=1), axis=1)
             # TODO: Apply classes
