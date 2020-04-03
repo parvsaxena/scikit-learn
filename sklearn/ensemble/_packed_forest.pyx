@@ -316,7 +316,7 @@ cdef class PkdForest:
         # Create loop for all observations
         # TODO: NOTE, max_n_classes no assigned any value in code
         cdef SIZE_t[:,:] predict_array = np.zeros(shape=(X.shape[0], self.n_trees), dtype=np.intp)
-        cdef DOUBLE_t[:,:,:] predict_matrix = np.zeros(shape=(X.shape[0], self.n_trees, self.max_n_classes), dtype=np.float64)
+        # cdef DOUBLE_t[:,:,:] predict_matrix = np.zeros(shape=(X.shape[0], self.n_trees, self.max_n_classes), dtype=np.float64)
         # see bin size of 1st bin as it will be maximum, and differ by 1 tree from others(at max)
         cdef SIZE_t[:,:] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.intp)
         # print("Curr_node shape is", curr_node.shape, curr_node.ndim)
@@ -350,9 +350,9 @@ cdef class PkdForest:
                         # print("Printing node", self.node[bin_no][curr_node[bin_no][tree_no]])
                         if not self._is_class_node(&self.node[bin_no][curr_node[bin_no][tree_no]]):
                             next_node, child = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
-                            if self._is_class_node(&self.node[bin_no][next_node]):
+                            # if self._is_class_node(&self.node[bin_no][next_node]):
                                 # print("Class node found!!")
-                                predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]]= self.value[bin_no][curr_node[bin_no][tree_no]][child]
+                                # predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]]= self.value[bin_no][curr_node[bin_no][tree_no]][child]
                                 # print("Writing for original tree no ", tree_no + self.bin_offsets[bin_no])
                             curr_node[bin_no,tree_no] = next_node
                             # print("Next node and child are", next_node, child)
@@ -368,17 +368,17 @@ cdef class PkdForest:
 
             # print("Prediction internally is", np.asarray(predict_array[obs_no,:]))
 
-        if majority_vote == False:
+        # if majority_vote == False:
             # prediction by average
             # print("Avg probabilities are")
-            array = np.mean(predict_matrix, axis=1)
+            # array = np.mean(predict_matrix, axis=1)
             # for i in range(0, array.shape[0]):
             #     print("Before avg is", i, np.asarray(predict_matrix[i]))
             #     print("Average prediction", i, array[i])
 
-            return array
-        else:
-            return np.asarray(predict_array, dtype = np.intp)
+            # return array
+        # else:
+        return np.asarray(predict_array, dtype = np.intp)
 
     cdef bint _is_class_node(self, PkdNode* pkdNode) nogil:
         return pkdNode.left_child == _TREE_LEAF

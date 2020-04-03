@@ -52,7 +52,7 @@ class PackedForest:
                                      self.n_bins,
                                      self.interleave_depth)
 
-    def predict(self, X, majority_vote=False, n_threads=n_threads):
+    def predict(self, X, majority_vote=True, n_threads=n_threads):
 
         # print("LET US BEGIN THE GAME")
         # print("No of threads are", n_threads)
