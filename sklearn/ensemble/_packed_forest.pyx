@@ -206,6 +206,7 @@ cdef class PkdForest:
         return tree.children_left[node.node_id] != _TREE_LEAF
 
     cdef bint _is_left_child_larger(self, object tree, SIZE_t node_id):
+        return True
         return tree.n_node_samples[tree.children_left[node_id]] > tree.n_node_samples[tree.children_right[node_id]]
 
     cdef bint _is_root_node(self, NodeRecord &node):
