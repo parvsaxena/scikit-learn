@@ -1,0 +1,9 @@
+Cython==0.29.15
+joblib==0.14.1
+numpy==1.18.1
+pkg-resources==0.0.0
+-e git+https://github.com/parvsaxena/scikit-learn.git@0284bcb967896a0167c33d1f9dcf251a28f804cb#egg=scikit_learn
+scipy==1.4.1
+six==1.14.0
+-e git+https://github.com/parvsaxena/sklearn-compiledtrees.git@c25bb395d1eb6f38da6cc43478404c50d866d460#egg=sklearn_compiledtrees
+treelite==0.32

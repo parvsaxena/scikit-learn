@@ -21,14 +21,17 @@ from ..utils.fixes import _joblib_parallel_args
 from ..utils.multiclass import check_classification_targets
 from ..utils.validation import check_is_fitted
 from ._packed_forest import PkdForest
+import multiprocessing
 
 __all__ = ["PackedForest"]
+n_bins = multiprocessing.cpu_count()
+n_threads = multiprocessing.cpu_count()
 
 
 class PackedForest:
     def __init__(self,
                  interleave_depth=1,
-                 n_bins=128,
+                 n_bins=n_bins,
                  forest_classifier=None):
 
         self.interleave_depth = interleave_depth
@@ -37,18 +40,22 @@ class PackedForest:
         # print(forest_classifier.estimators_)
         self.n_trees = forest_classifier.n_estimators
         self.tree_list = forest_classifier.estimators_
+        self.classes_ = self.tree_list[0].classes_
+        if self.n_trees < n_bins:
+            self.n_bins = self.n_trees
         # for tree in self.tree_list:
         #     print(tree.tree_.node_count, tree.tree_.capacity)
         # print(self.tree_list)
+        print("No of bins are", n_bins)
 
         self._pkd_forest = PkdForest([tree.tree_ for tree in self.tree_list],
                                      self.n_bins,
                                      self.interleave_depth)
 
-    def predict(self, X, majority_vote=False, n_threads=8):
+    def predict(self, X, majority_vote=False, n_threads=n_threads):
 
         # print("LET US BEGIN THE GAME")
-
+        # print("No of threads are", n_threads)
         # for i in range(0, len(self.tree_list)):
         #     print("Prediction for tree", i, "original was")
         #     prediction = self.tree_list[i].tree_.predict(np.asarray(X, dtype=np.float32))
@@ -67,4 +74,5 @@ class PackedForest:
             a = np.apply_along_axis(np.bincount, axis=1, arr=outputs, minlength = np.max(outputs) +1)
             return np.argmax(a, axis=1)
         else:
-            return np.argmax(outputs, axis=1)
+            return self.classes_.take(np.argmax(outputs, axis=1), axis=0)
+            # return np.argmax(outputs, axis=1)

@@ -123,7 +123,7 @@ def benchmark_cifar10(n_estimators = 2048, interleave_depth = 2, batch_size = 1,
 
     packed_forest(clf=clf, X_test=X_test, Y_test=Y_test,  interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
-    tree_lite(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+    tree_lite(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads, annotations=False, quantization=False)
 
     compiled_trees(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
@@ -267,7 +267,7 @@ def packed_forest(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
 
     # Packing time
     tstart = datetime.now()
-    frst = PackedForest(forest_classifier=clf, interleave_depth=interleave_depth, n_bins=8)
+    frst = PackedForest(forest_classifier=clf, interleave_depth=interleave_depth, n_bins=n_threads)
     delta = (datetime.now() - tstart).total_seconds()
     print("PkdForest: Packing Time (sec) is ", delta)
 
@@ -312,7 +312,7 @@ def packed_forest(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
     # # print(b)
 
 
-def tree_lite(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8):
+def tree_lite(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8, annotations=False, quantization=False):
     print("Calling treelite")
     # batches = [batch_size]
     batches = [1, 10, 100]
@@ -334,9 +334,21 @@ def tree_lite(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8
     # predictor = treelite.runtime.Predictor('./mymodel_cifar.so', verbose=True)
     # NEW------------------------
     model = process_model(clf)
+
+    params = {'parallel_comp': 32}
+    if quantization is True:
+        params = {'quantize': 1}
+
+    if annotations is True:
+        annotator = treelite.Annotator()
+        # TODO: dmat
+        annotator.annotate_branch(model=model, dmat=dmat, verbose=True)
+        annotator.save(path='mymodel-annotation.json')
+        # Add annotator path
+        pass
+
     model.export_lib(toolchain=toolchain, libpath='./cifarmodel.so',
-                     params={# 'annotate_in': './annotation.json',
-                             'parallel_comp': 32}, verbose=True)
+                     params={params}, verbose=True)
     predictor = treelite.runtime.Predictor(libpath='cifarmodel.so', verbose=True)
     # NEW------------------------
     delta = (datetime.now() - tstart).total_seconds()
