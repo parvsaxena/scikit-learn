@@ -26,6 +26,32 @@ def flush_cache(arr):
         arr[i] = random.random()
 
 
+def benchmark_fashion_mnist(n_estimators=128, interleave_depth=2, batch_size=1, n_threads=multiprocessing.cpu_count()):
+    print("Fetching fashion MNIST")
+    f_mnist = fetch_openml('Fashion-MNIST')
+
+    print(f_mnist.data.shape)
+    X = f_mnist.data
+    Y = f_mnist.target
+
+    X_train = X[:60000]
+    X_test = X[60000:]
+
+    Y_train = Y[:60000]
+    Y_test = Y[60000:]
+
+    print(type(X.dtype), type(Y.dtype))
+    print(X_train.shape, X_test.shape, Y_train.shape, Y_test.shape)
+
+    clf = RandomForestClassifier(n_estimators=n_estimators)
+    print("Fitting")
+    clf.fit(X_train, Y_train)
+    print("Classifier order is", clf.estimators_[0].classes_)
+
+    packed_forest(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size,
+                  n_threads=n_threads)
+
+
 def benchmark_cifar_small(n_estimators = 2048, interleave_depth = 2, batch_size = 1, n_threads = 8):
     print("Fetching cifar small")
     cifar = fetch_openml('cifar_10')
@@ -119,13 +145,13 @@ def benchmark_cifar10(n_estimators = 2048, interleave_depth = 2, batch_size = 1,
     clf.fit(X_train, Y_train)
     print("Classifier order is", clf.estimators_[0].classes_)
 
-    sklearn_naive(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+    # sklearn_naive(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
-    packed_forest(clf=clf, X_test=X_test, Y_test=Y_test,  interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+    # packed_forest(clf=clf, X_test=X_test, Y_test=Y_test,  interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
     tree_lite(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads, annotations=False, quantization=False)
 
-    compiled_trees(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+    # compiled_trees(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
 
 def benchmark_mnist(n_estimators = 2048, interleave_depth = 2, batch_size = 1, n_threads = 8):
@@ -403,8 +429,10 @@ def tree_lite(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8
 if __name__ == "__main__":
     # benchmark_mnist(n_estimators=16, interleave_depth=2, batch_size=10000, n_threads=multiprocessing.cpu_count())
 
-    benchmark_cifar10(n_estimators=128, interleave_depth=2, batch_size=1, n_threads=multiprocessing.cpu_count())
+    # benchmark_cifar10(n_estimators=128, interleave_depth=2, batch_size=1, n_threads=multiprocessing.cpu_count())
 
     # benchmark_higgs(n_estimators=1, interleave_depth=2, batch_size=1, n_threads=multiprocessing.cpu_count())
 
     # benchmark_cifar_small(n_estimators=10, interleave_depth=2, batch_size=10000, n_threads=multiprocessing.cpu_count())
+
+    benchmark_fashion_mnist(n_estimators=128, interleave_depth=2, batch_size=1, n_threads=multiprocessing.cpu_count())
