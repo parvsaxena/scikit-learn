@@ -48,8 +48,14 @@ def benchmark_fashion_mnist(n_estimators=128, interleave_depth=2, batch_size=1, 
     clf.fit(X_train, Y_train)
     print("Classifier order is", clf.estimators_[0].classes_)
 
-    packed_forest(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size,
-                  n_threads=n_threads)
+    # sklearn_naive(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+
+    packed_forest(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+
+    tree_lite(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads, annotations=False, quantization=False)
+
+    compiled_trees(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+
 
 
 def benchmark_cifar_small(n_estimators = 2048, interleave_depth = 2, batch_size = 1, n_threads = 8):
@@ -71,11 +77,14 @@ def benchmark_cifar_small(n_estimators = 2048, interleave_depth = 2, batch_size 
     print("Fitting")
     clf.fit(X_train, Y_train)
 
+    # sklearn_naive(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+
     # packed_forest(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
     compiled_trees(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size,
                    n_threads=n_threads)
 
+    tree_lite(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads, annotations=False, quantization=False)
 
 
 def benchmark_higgs(n_estimators = 2048, interleave_depth = 2, batch_size = 1, n_threads = 8):
@@ -362,19 +371,19 @@ def tree_lite(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8
     model = process_model(clf)
 
     params = {'parallel_comp': 32}
-    if quantization is True:
-        params = {'quantize': 1}
+    # if quantization is True:
+    #     params = {'quantize': 1}
 
-    if annotations is True:
-        annotator = treelite.Annotator()
-        # TODO: dmat
-        annotator.annotate_branch(model=model, dmat=dmat, verbose=True)
-        annotator.save(path='mymodel-annotation.json')
-        # Add annotator path
-        pass
+    # if annotations is True:
+    #     annotator = treelite.Annotator()
+    #     # TODO: dmat
+    #     annotator.annotate_branch(model=model, dmat=dmat, verbose=True)
+    #     annotator.save(path='mymodel-annotation.json')
+    #     # Add annotator path
+    #     pass
 
     model.export_lib(toolchain=toolchain, libpath='./cifarmodel.so',
-                     params={params}, verbose=True)
+                     params={'parallel_comp': 32}, verbose=True)
     predictor = treelite.runtime.Predictor(libpath='cifarmodel.so', verbose=True)
     # NEW------------------------
     delta = (datetime.now() - tstart).total_seconds()
