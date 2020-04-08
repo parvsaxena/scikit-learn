@@ -1,7 +1,6 @@
-
 # distutils: language = c++
 from cpython cimport Py_INCREF, PyObject, PyTypeObject
-from cython import wraparound, boundscheck
+
 from libc.stdlib cimport free
 from libc.stdlib cimport malloc
 from libc.math cimport fabs
@@ -308,19 +307,16 @@ cdef class PkdForest:
             self.node[bin_no][self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + i].threshold = _TREE_UNDEFINED
             # print("node no ", self.n_nodes_per_bin[bin_no] - trees[self.bin_offsets[bin_no]].max_n_classes + i)
             # print("was assigned ", i)
-    
-    
-    # @boundscheck(False)  # Deactivate bounds checking
-    # @wraparound(False)   # Deactivate negative indexing.
+
     cpdef np.ndarray predict(self, object X_ndarray, bint majority_vote, SIZE_t n_threads):
-        cdef const DTYPE_t[:, :] X = X_ndarray
+        cdef const DOUBLE_t[:, :] X = X_ndarray
         # IF SKLEARN_OPENMP_PARALLELISM_ENABLED:
         #     print(openmp.omp_get_max_threads())
 
         # Create loop for all observations
         # TODO: NOTE, max_n_classes no assigned any value in code
-        # cdef SIZE_t[:,:] predict_array = np.zeros(shape=(X.shape[0], self.n_trees), dtype=np.intp)
-        cdef DOUBLE_t[:,:,:] predict_matrix = np.empty(shape=(X.shape[0], self.n_trees, self.max_n_classes), dtype=np.float64)
+        cdef SIZE_t[:,:] predict_array = np.zeros(shape=(X.shape[0], self.n_trees), dtype=np.intp)
+        cdef DOUBLE_t[:,:,:] predict_matrix = np.zeros(shape=(X.shape[0], self.n_trees, self.max_n_classes), dtype=np.float64)
         # see bin size of 1st bin as it will be maximum, and differ by 1 tree from others(at max)
         cdef SIZE_t[:,:] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.intp)
         # print("Curr_node shape is", curr_node.shape, curr_node.ndim)
@@ -356,7 +352,7 @@ cdef class PkdForest:
                             next_node, child = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
                             if self._is_class_node(&self.node[bin_no][next_node]):
                                 # print("Class node found!!")
-                                predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]] = self.value[bin_no][curr_node[bin_no][tree_no]][child]
+                                predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]]= self.value[bin_no][curr_node[bin_no][tree_no]][child]
                                 # print("Writing for original tree no ", tree_no + self.bin_offsets[bin_no])
                             curr_node[bin_no,tree_no] = next_node
                             # print("Next node and child are", next_node, child)
@@ -365,31 +361,30 @@ cdef class PkdForest:
                             # print("current node now is", curr_node[bin_no,tree_no])
 
                 # time to predict classes
-                # if majority_vote == True:
-                #     for tree_no in range(0, self.bin_sizes[bin_no]):
-                #         predict_array[obs_no, self.bin_offsets[bin_no] + tree_no] = self.node[bin_no][curr_node[bin_no,tree_no]].right_child
+                if majority_vote == True:
+                    for tree_no in range(0, self.bin_sizes[bin_no]):
+                        predict_array[obs_no, self.bin_offsets[bin_no] + tree_no] = self.node[bin_no][curr_node[bin_no,tree_no]].right_child
 
 
             # print("Prediction internally is", np.asarray(predict_array[obs_no,:]))
 
-        # if majority_vote == False:
+        if majority_vote == False:
             # prediction by average
             # print("Avg probabilities are")
-        array = np.mean(predict_matrix, axis=1)
+            array = np.mean(predict_matrix, axis=1)
             # for i in range(0, array.shape[0]):
             #     print("Before avg is", i, np.asarray(predict_matrix[i]))
             #     print("Average prediction", i, array[i])
 
-        return array
-        # else:
-        #     return np.asarray(predict_array, dtype = np.intp)
+            return array
+        else:
+            return np.asarray(predict_array, dtype = np.intp)
 
     cdef bint _is_class_node(self, PkdNode* pkdNode) nogil:
         return pkdNode.left_child == _TREE_LEAF
 
-    # @boundscheck(False)  # Deactivate bounds checking
-    # @wraparound(False)   # Deactivate negative indexing.
-    cdef (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, const DTYPE_t[:,:] X) nogil:
+    # TODO: Avoid passing object X, pass reference
+    cdef (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, const DOUBLE_t[:,:] X) nogil:
         # TODO: Make sure this pkdNode is not class node
         if(X[obs_no][pkdNode.feature] <= pkdNode.threshold):
             return pkdNode.left_child, IS_LEFT
