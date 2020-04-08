@@ -320,7 +320,7 @@ cdef class PkdForest:
         # Create loop for all observations
         # TODO: NOTE, max_n_classes no assigned any value in code
         # cdef SIZE_t[:,:] predict_array = np.zeros(shape=(X.shape[0], self.n_trees), dtype=np.intp)
-        cdef DOUBLE_t[:,:] predict_matrix = np.empty(shape=(X.shape[0], self.max_n_classes), dtype=np.float64)
+        cdef DOUBLE_t[:,:,:] predict_matrix = np.empty(shape=(X.shape[0], self.n_trees, self.max_n_classes), dtype=np.float64)
         # see bin size of 1st bin as it will be maximum, and differ by 1 tree from others(at max)
         cdef SIZE_t[:,:] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.intp)
         # print("Curr_node shape is", curr_node.shape, curr_node.ndim)
@@ -328,7 +328,7 @@ cdef class PkdForest:
         # TODO: Add parallel support here
 
         cdef:
-            SIZE_t bin_no, obs_no, tree_no, k
+            SIZE_t bin_no, obs_no, tree_no
             SIZE_t internal_nodes_reached
             SIZE_t next_node, child
 
@@ -356,11 +356,7 @@ cdef class PkdForest:
                             next_node, child = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
                             if self._is_class_node(&self.node[bin_no][next_node]):
                                 # print("Class node found!!")
-                                # predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]] = self.value[bin_no][curr_node[bin_no][tree_no]][child]
-                                # Write a nice for loop to add
-                                # for k in range(0, self.max_n_classes):
-                                #     predict_matrix[obs_no][k] += self.value[bin_no][curr_node[bin_no][tree_no]][child][k]
-                                predict_matrix[obs_no] = self.value[bin_no][curr_node[bin_no][tree_no]][child]
+                                predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]] = self.value[bin_no][curr_node[bin_no][tree_no]][child]
                                 # print("Writing for original tree no ", tree_no + self.bin_offsets[bin_no])
                             curr_node[bin_no,tree_no] = next_node
                             # print("Next node and child are", next_node, child)
@@ -379,32 +375,12 @@ cdef class PkdForest:
         # if majority_vote == False:
             # prediction by average
             # print("Avg probabilities are")
-        # array = np.mean(predict_matrix, axis=1)
+        array = np.mean(predict_matrix, axis=1)
             # for i in range(0, array.shape[0]):
             #     print("Before avg is", i, np.asarray(predict_matrix[i]))
             #     print("Average prediction", i, array[i])
-        
-        # Write parallel loop do comupte argmax
-        
-        cdef: 
-            SIZE_t max_index, j
-            DOUBLE_t max_value
-            SIZE_t classes = self.max_n_classes
-            SIZE_t[:] array = np.empty(shape=(X.shape[0]), dtype=np.intp)
-        for obs_no in prange(0, X.shape[0], nogil=True, schedule='dynamic', num_threads = n_threads):
-            # find argmax for obs
-            max_index = 0
-            max_value = 0
-            for j in range(0, classes):
-                # Ideally should be /n
-                if X[obs_no, j] > max_value:
-                    max_value = X[obs_no, j]
-                    max_index = j
-            
-        return np.asarray(array)
-        
-        # return np.asarray(predict_matrix, dtype=np.float64)
-        # return array
+
+        return array
         # else:
         #     return np.asarray(predict_array, dtype = np.intp)
 
