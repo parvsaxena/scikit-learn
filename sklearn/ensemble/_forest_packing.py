@@ -74,5 +74,6 @@ class PackedForest:
             a = np.apply_along_axis(np.bincount, axis=1, arr=outputs, minlength = np.max(outputs) +1)
             return np.argmax(a, axis=1)
         else:
-            return self.classes_.take(np.argmax(outputs, axis=1), axis=0)
+            return outputs
+            # return self.classes_.take(np.argmax(outputs, axis=1), axis=0)
             # return np.argmax(outputs, axis=1)

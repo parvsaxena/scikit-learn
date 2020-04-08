@@ -154,13 +154,13 @@ def benchmark_cifar10(n_estimators = 2048, interleave_depth = 2, batch_size = 1,
     clf.fit(X_train, Y_train)
     print("Classifier order is", clf.estimators_[0].classes_)
 
-    # sklearn_naive(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+    sklearn_naive(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
-    # packed_forest(clf=clf, X_test=X_test, Y_test=Y_test,  interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+    packed_forest(clf=clf, X_test=X_test, Y_test=Y_test,  interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
-    tree_lite(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads, annotations=False, quantization=False)
+    # tree_lite(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads, annotations=False, quantization=False)
 
-    # compiled_trees(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+    compiled_trees(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
 
 def benchmark_mnist(n_estimators = 2048, interleave_depth = 2, batch_size = 1, n_threads = 8):
@@ -224,7 +224,7 @@ def compiled_trees(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_thre
             compiled_trees_lst = []
 
             runs = (int)(Y_test.shape[0]/batch_size)
-
+            print("Runs are ", runs)
             for i in range(0, runs):
                 # Flush cache before each run
                 flush_cache(arr)
@@ -273,6 +273,7 @@ def sklearn_naive(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
             # Calculate for Sklearn Naive
             # ------------------------------------------------
             runs = (int)(Y_test.shape[0]/batch_size)
+            print("Runs are", runs)
             for i in range(0, runs):
                 # Flush cache before each run
                 flush_cache(arr)
@@ -291,10 +292,11 @@ def sklearn_naive(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
 def packed_forest(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8):
     print("Calling PackedForest")
     # batches = [batch_size]
-    batches = [1, 10, 100]
+    batches = [1, 10, 20, 100, 500, 1000]
     # batches = [10000, 5000, 1000, 500, 100, 10, 1]
     arr = np.empty(shape=(int)(cache_size/4), dtype=np.float32)  # 4bytes for n.float32
-
+    X_test = np.asarray(X_test, dtype=np.float32)
+    Y_test = np.asarray(Y_test, dtype=np.float32)
     # Shuffle dataset
     X_test, Y_test = shuffle(X_test, Y_test)
     X_test = X_test[:1000]
@@ -312,9 +314,8 @@ def packed_forest(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
         rep_lst = []
         for reps in range(repetitions):
             packed_forest_lst = []
-
             runs = (int)(Y_test.shape[0] / batch_size)
-
+            print("Runs are", runs)
             for i in range(0, runs):
                 # Flush cache before each run
                 flush_cache(arr)
@@ -329,18 +330,18 @@ def packed_forest(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
         print("PkdForest:Avg prediction time (ms) for {0} is {1}".format(batch_size, reduce(add, rep_lst) / repetitions))
 
     # # print("Predicting")
-    # a = clf.predict(X_test)
-    # print(a[:5])
-    # b = frst.predict(X_test)
+    a = clf.predict(X_test)
+    print(a[:5])
+    b = frst.predict(X_test)
     # # b = list(map(str, np.asarray(frst.predict(X_test), dtype=np.int)))
-    # print(b[:5])
+    print(b[:5])
     #
-    # print("a vs b")
-    # print(np.sum(np.equal(a, b)))
-    # print("orig vs a")
-    # print(np.sum(np.equal(Y_test, a)))
-    # print("orig vs b")
-    # print(np.sum(np.equal(Y_test, b)))
+    print("a vs b")
+    print(np.sum(np.equal(a, b)))
+    print("orig vs a")
+    print(np.sum(np.equal(Y_test, a)))
+    print("orig vs b")
+    print(np.sum(np.equal(Y_test, b)))
     # #
     # # print("Printing outputs")
     # # print(a)
@@ -438,10 +439,10 @@ def tree_lite(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8
 if __name__ == "__main__":
     # benchmark_mnist(n_estimators=16, interleave_depth=2, batch_size=10000, n_threads=multiprocessing.cpu_count())
 
-    # benchmark_cifar10(n_estimators=128, interleave_depth=2, batch_size=1, n_threads=multiprocessing.cpu_count())
+    benchmark_cifar10(n_estimators=128, interleave_depth=4, batch_size=1, n_threads=multiprocessing.cpu_count())
 
     # benchmark_higgs(n_estimators=1, interleave_depth=2, batch_size=1, n_threads=multiprocessing.cpu_count())
 
     # benchmark_cifar_small(n_estimators=10, interleave_depth=2, batch_size=10000, n_threads=multiprocessing.cpu_count())
 
-    benchmark_fashion_mnist(n_estimators=128, interleave_depth=2, batch_size=1, n_threads=multiprocessing.cpu_count())
+    # benchmark_fashion_mnist(n_estimators=128, interleave_depth=2, batch_size=1, n_threads=multiprocessing.cpu_count())
