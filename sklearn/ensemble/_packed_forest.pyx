@@ -1,3 +1,7 @@
+# cython: cdivision=True
+# cython: boundscheck=False
+# cython: wraparound=False
+
 # cython: profile=True
 # distutils: language = c++
 from cpython cimport Py_INCREF, PyObject, PyTypeObject
