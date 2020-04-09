@@ -42,7 +42,7 @@ arr = np.empty(shape=(int)(cache_size/4), dtype=np.float32)  # 4bytes for n.floa
 
 
 runs = (int)(Y_test.shape[0]/batch_size)
-
+# runs = (int)(runs/10)
 print("Packing")
 frst = PackedForest(forest_classifier=clf, interleave_depth=interleave_depth, n_bins=n_threads)
 
@@ -80,7 +80,7 @@ pr = cProfile.Profile()
 pr.enable()
 for i in range(0, runs):
     flush_cache(arr)
-    compiled_predictor.predict(X_test[0:1000])
+    compiled_predictor.predict(X_test[i:(i+1)*batch_size])
 pr.disable()
 s = StringIO()
 # sortby = 'cumulative'
