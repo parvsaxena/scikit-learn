@@ -13,7 +13,7 @@ from test_treelite import *
 from sklearn.utils import shuffle
 import random
 import multiprocessing
-
+import time
 custom_data_home = '.'
 toolchain = 'gcc'
 cache_size = (1024*1024)*8      # MB * 8
@@ -153,14 +153,15 @@ def benchmark_cifar10(n_estimators = 2048, interleave_depth = 2, batch_size = 1,
     print("Fitting")
     clf.fit(X_train, Y_train)
     print("Classifier order is", clf.estimators_[0].classes_)
+    
+    print("Interleaving is ", interleave_depth)
+    sklearn_naive(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
-    # sklearn_naive(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+    packed_forest(clf=clf, X_test=X_test, Y_test=Y_test,  interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
-    # packed_forest(clf=clf, X_test=X_test, Y_test=Y_test,  interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+    # tree_lite(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads, annotations=False, quantization=False)
 
-    tree_lite(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads, annotations=False, quantization=False)
-
-    # compiled_trees(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+    compiled_trees(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
 
 def benchmark_mnist(n_estimators = 2048, interleave_depth = 2, batch_size = 1, n_threads = 8):
@@ -230,13 +231,13 @@ def compiled_trees(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_thre
                 flush_cache(arr)
                 tstart = datetime.now()
                 compiled_predictor.predict(X_test[i:(i+1)*batch_size])
-                delta = (datetime.now() - tstart).total_seconds()*1000  # ms
+                delta = (datetime.now() - tstart)  # ms
                 compiled_trees_lst.append(delta)
 
             op_time = reduce(add, compiled_trees_lst)/Y_test.shape[0]
-            print("compiledTrees normalized operation (ms) is ", op_time)
+            print("compiledTrees normalized operation (us) is ", op_time)
             rep_lst.append(op_time)
-        print("compiledTrees:Avg prediction time (ms) for {0} is {1}".format(batch_size, reduce(add, rep_lst) / repetitions))
+        print("compiledTrees:Avg prediction time (ms) for {0} is {1}".format(batch_size, reduce(add, rep_lst)/repetitions))
 
     # Check correctness
 
@@ -278,11 +279,11 @@ def sklearn_naive(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
                 flush_cache(arr)
                 tstart = datetime.now()
                 clf.predict(X_test[i:(i+1)*batch_size])
-                delta = (datetime.now() - tstart).total_seconds()*1000  # ms
+                delta = (datetime.now() - tstart)
                 sklearn_naive_lst.append(delta)
 
             op_time = reduce(add, sklearn_naive_lst)/Y_test.shape[0]
-            print("Naive operation is", op_time)
+            print("Naive operation (us) is", op_time)
             rep_lst.append(op_time)
         print("SK-Native:Avg prediction time for {0} is {1}".format(batch_size, reduce(add, rep_lst)/repetitions))
         # ---------------------------------------------
@@ -320,11 +321,11 @@ def packed_forest(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
                 flush_cache(arr)
                 tstart = datetime.now()
                 frst.predict(X_test[i:(i+1)*batch_size], n_threads=n_threads)
-                delta = (datetime.now() - tstart).total_seconds()*1000  # ms
+                delta = (datetime.now() - tstart)
                 packed_forest_lst.append(delta)
 
             op_time = reduce(add, packed_forest_lst)/Y_test.shape[0]
-            print("PackedForest normalized operation (ms) is", op_time)
+            print("PackedForest normalized operation is", op_time)
             rep_lst.append(op_time)
         print("PkdForest:Avg prediction time (ms) for {0} is {1}".format(batch_size, reduce(add, rep_lst) / repetitions))
 
@@ -438,10 +439,10 @@ def tree_lite(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8
 if __name__ == "__main__":
     # benchmark_mnist(n_estimators=16, interleave_depth=2, batch_size=10000, n_threads=multiprocessing.cpu_count())
 
-    # benchmark_cifar10(n_estimators=128, interleave_depth=2, batch_size=1, n_threads=multiprocessing.cpu_count())
+    benchmark_cifar10(n_estimators=128, interleave_depth=4, batch_size=1, n_threads=multiprocessing.cpu_count())
 
     # benchmark_higgs(n_estimators=1, interleave_depth=2, batch_size=1, n_threads=multiprocessing.cpu_count())
 
     # benchmark_cifar_small(n_estimators=10, interleave_depth=2, batch_size=10000, n_threads=multiprocessing.cpu_count())
 
-    benchmark_fashion_mnist(n_estimators=128, interleave_depth=2, batch_size=1, n_threads=multiprocessing.cpu_count())
+    # benchmark_fashion_mnist(n_estimators=128, interleave_depth=2, batch_size=1, n_threads=multiprocessing.cpu_count())
