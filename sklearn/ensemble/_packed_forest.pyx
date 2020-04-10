@@ -320,9 +320,10 @@ cdef class PkdForest:
 
         # Create loop for all observations
         # TODO: NOTE, max_n_classes no assigned any value in code
-        cdef SIZE_t[:,:] predict_array = np.zeros(shape=(X.shape[0], self.n_trees), dtype=np.intp)
+        # cdef SIZE_t[:,:] predict_array = np.zeros(shape=(X.shape[0], self.n_trees), dtype=np.intp)
         cdef DOUBLE_t[:,:,:] predict_matrix = np.zeros(shape=(X.shape[0], self.n_trees, self.max_n_classes), dtype=np.float64)
         # see bin size of 1st bin as it will be maximum, and differ by 1 tree from others(at max)
+        # TODO: Make this 1D ?
         cdef SIZE_t[:,:] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.intp)
         # print("Curr_node shape is", curr_node.shape, curr_node.ndim)
         # print("Predict shape is", predict_array.shape, predict_array.ndim)
@@ -332,11 +333,12 @@ cdef class PkdForest:
             SIZE_t bin_no, obs_no, tree_no, k
             SIZE_t internal_nodes_reached
             SIZE_t next_node, child
+        
 
         for bin_no in prange(0, self.n_bins, nogil=True, schedule='static', num_threads = n_threads):
             # print("STarting code for bin no", bin_no)
-
             for obs_no in range(0, X.shape[0]):
+
                 # print("observation no ", obs_no)
                 # print("observation is ", X[obs_no])
 
@@ -368,9 +370,9 @@ cdef class PkdForest:
                             # print("current node now is", curr_node[bin_no,tree_no])
 
                 # time to predict classes
-                if majority_vote == True:
-                    for tree_no in range(0, self.bin_sizes[bin_no]):
-                        predict_array[obs_no, self.bin_offsets[bin_no] + tree_no] = self.node[bin_no][curr_node[bin_no,tree_no]].right_child
+                # if majority_vote == True:
+                #     for tree_no in range(0, self.bin_sizes[bin_no]):
+                #         predict_array[obs_no, self.bin_offsets[bin_no] + tree_no] = self.node[bin_no][curr_node[bin_no,tree_no]].right_child
 
 
             # print("Prediction internally is", np.asarray(predict_array[obs_no,:]))
@@ -426,7 +428,7 @@ cdef class PkdForest:
         #else:
         #    return np.asarray(predict_array, dtype = np.intp)
 
-    cdef bint _is_class_node(self, PkdNode* pkdNode) nogil:
+    cdef inline bint _is_class_node(self, PkdNode* pkdNode) nogil:
         return pkdNode.left_child == _TREE_LEAF
 
     # TODO: Avoid passing object X, pass reference

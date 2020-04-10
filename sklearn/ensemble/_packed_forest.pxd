@@ -50,7 +50,7 @@ cdef class PkdForest:
     cdef _create_bin(self, list trees, SIZE_t bin_no) except +
     cdef _copy_node(self, PkdNode* pkdNode, object node, SIZE_t node_id)
     cdef bint _is_leaf(self, NodeRecord &node, object tree)
-    cdef bint _is_class_node(self, PkdNode* pkdNode) nogil
+    cdef inline bint _is_class_node(self, PkdNode* pkdNode) nogil
     cdef bint _is_internal_node(self, NodeRecord &node, object tree)
     cdef bint _is_root_node(self, NodeRecord &node)
     cdef _process_node(self, NodeRecord node, deque[NodeRecord] &deq, list trees, SIZE_t bin_no, bint interleave)
