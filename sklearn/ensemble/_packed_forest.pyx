@@ -432,9 +432,9 @@ cdef class PkdForest:
         return pkdNode.left_child == _TREE_LEAF
 
     # TODO: Avoid passing object X, pass reference
-    cdef (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, const DOUBLE_t[:,:] X) nogil:
+    cdef inline (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, const DOUBLE_t[:,:] X) nogil:
         # TODO: Make sure this pkdNode is not class node
         if(X[obs_no][pkdNode.feature] <= pkdNode.threshold):
             return pkdNode.left_child, IS_LEFT
-        else:
-            return pkdNode.right_child, IS_RIGHT
+        
+        return pkdNode.right_child, IS_RIGHT
