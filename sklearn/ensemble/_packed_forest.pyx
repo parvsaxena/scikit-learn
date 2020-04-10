@@ -185,7 +185,7 @@ cdef class PkdForest:
         pkdNode.right_child = tree.children_right[node_id]
         pkdNode.feature = tree.feature[node_id]
         pkdNode.threshold = tree.threshold[node_id]
-        pkdNode.n_node_samples = tree.n_node_samples[node_id]
+        # pkdNode.n_node_samples = tree.n_node_samples[node_id]
 
     # Copy node from NodeRecord
     cdef _copy_processed_node(self, PkdNode *pkdNode, NodeRecord &node, SIZE_t working_index, list trees):
@@ -193,7 +193,7 @@ cdef class PkdForest:
         pkdNode.right_child = trees[node.tree_id].children_right[node.node_id]
         pkdNode.feature = trees[node.tree_id].feature[node.node_id]
         pkdNode.threshold = trees[node.tree_id].threshold[node.node_id]
-        pkdNode.n_node_samples = trees[node.tree_id].n_node_samples[node.node_id]
+        # pkdNode.n_node_samples = trees[node.tree_id].n_node_samples[node.node_id]
 
     cdef _link_parent_to_node(self, PkdNode *pkdNode_p, SIZE_t working_index, NodeRecord &node):
         # link the bin position of node to parent's left or right
