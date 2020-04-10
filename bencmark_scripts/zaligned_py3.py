@@ -30,7 +30,7 @@ box_plot_data = [b0, b1, b2]
 
 data = pd.DataFrame({'PF':box_plot_data[0],
                      'CT':box_plot_data[1],
-                     'SK-n':box_plot_data[1]
+                     'SK-n':box_plot_data[2]
                      })
 
 sns.set(font_scale=scale)
