@@ -185,7 +185,7 @@ cdef class PkdForest:
         pkdNode.right_child = tree.children_right[node_id]
         pkdNode.feature = tree.feature[node_id]
         pkdNode.threshold = tree.threshold[node_id]
-        pkdNode.n_node_samples = tree.n_node_samples[node_id]
+        # pkdNode.n_node_samples = tree.n_node_samples[node_id]
 
     # Copy node from NodeRecord
     cdef _copy_processed_node(self, PkdNode *pkdNode, NodeRecord &node, SIZE_t working_index, list trees):
@@ -193,7 +193,7 @@ cdef class PkdForest:
         pkdNode.right_child = trees[node.tree_id].children_right[node.node_id]
         pkdNode.feature = trees[node.tree_id].feature[node.node_id]
         pkdNode.threshold = trees[node.tree_id].threshold[node.node_id]
-        pkdNode.n_node_samples = trees[node.tree_id].n_node_samples[node.node_id]
+        # pkdNode.n_node_samples = trees[node.tree_id].n_node_samples[node.node_id]
 
     cdef _link_parent_to_node(self, PkdNode *pkdNode_p, SIZE_t working_index, NodeRecord &node):
         # link the bin position of node to parent's left or right
@@ -320,9 +320,8 @@ cdef class PkdForest:
         # IF SKLEARN_OPENMP_PARALLELISM_ENABLED:
         #     print(openmp.omp_get_max_threads())
 
-        cdef SIZE_t[:,:] predict_array = np.zeros(shape=(X.shape[0], self.n_trees), dtype=np.intp)
+        # cdef SIZE_t[:,:] predict_array = np.zeros(shape=(X.shape[0], self.n_trees), dtype=np.intp)
         cdef DOUBLE_t[:,:,:] predict_matrix = np.zeros(shape=(X.shape[0], self.n_trees, self.max_n_classes), dtype=np.float64)
-        # see bin size of 1st bin as it will be maximum, and differ by 1 tree from others(at max)
         cdef SIZE_t[:,:] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.intp)
 
         cdef:
@@ -332,7 +331,6 @@ cdef class PkdForest:
 
         for bin_no in prange(0, self.n_bins, nogil=True, schedule='static', num_threads = n_threads):
             # print("STarting code for bin no", bin_no)
-
             for obs_no in range(0, X.shape[0]):
                 # print("observation no ", obs_no)
                 # print("observation is ", X[obs_no])
@@ -365,9 +363,9 @@ cdef class PkdForest:
                             # print("current node now is", curr_node[bin_no,tree_no])
 
                 # time to predict classes
-                if majority_vote == True:
-                    for tree_no in range(0, self.bin_sizes[bin_no]):
-                        predict_array[obs_no, self.bin_offsets[bin_no] + tree_no] = self.node[bin_no][curr_node[bin_no,tree_no]].right_child
+                # if majority_vote == True:
+                #     for tree_no in range(0, self.bin_sizes[bin_no]):
+                #         predict_array[obs_no, self.bin_offsets[bin_no] + tree_no] = self.node[bin_no][curr_node[bin_no,tree_no]].right_child
 
 
             # print("Prediction internally is", np.asarray(predict_array[obs_no,:]))
@@ -422,13 +420,13 @@ cdef class PkdForest:
         #else:
         #    return np.asarray(predict_array, dtype = np.intp)
 
-    cdef bint _is_class_node(self, PkdNode* pkdNode) nogil:
+    cdef inline bint _is_class_node(self, PkdNode* pkdNode) nogil:
         return pkdNode.left_child == _TREE_LEAF
 
     # TODO: Avoid passing object X, pass reference
-    cdef (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, const DOUBLE_t[:,:] X) nogil:
+    cdef inline (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, const DOUBLE_t[:,:] X) nogil:
         # TODO: Make sure this pkdNode is not class node
         if(X[obs_no][pkdNode.feature] <= pkdNode.threshold):
             return pkdNode.left_child, IS_LEFT
-        else:
-            return pkdNode.right_child, IS_RIGHT
+        
+        return pkdNode.right_child, IS_RIGHT
