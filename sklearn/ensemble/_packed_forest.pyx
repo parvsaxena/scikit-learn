@@ -329,7 +329,7 @@ cdef class PkdForest:
         # TODO: Add parallel support here
 
         cdef:
-            SIZE_t bin_no, obs_no, tree_no
+            SIZE_t bin_no, obs_no, tree_no, k
             SIZE_t internal_nodes_reached
             SIZE_t next_node, child
 
@@ -357,7 +357,9 @@ cdef class PkdForest:
                             next_node, child = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
                             if self._is_class_node(&self.node[bin_no][next_node]):
                                 # print("Class node found!!")
-                                predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]]= self.value[bin_no][curr_node[bin_no][tree_no]][child]
+                                # for k in range(0, self.max_n_classes):
+                                    # predict_matrix[obs_no][k] += self.value[bin_no][curr_node[bin_no][tree_no]][child][k]
+                                predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]] = self.value[bin_no][curr_node[bin_no][tree_no]][child]
                                 # print("Writing for original tree no ", tree_no + self.bin_offsets[bin_no])
                             curr_node[bin_no,tree_no] = next_node
                             # print("Next node and child are", next_node, child)
@@ -373,17 +375,55 @@ cdef class PkdForest:
 
             # print("Prediction internally is", np.asarray(predict_array[obs_no,:]))
 
-        if majority_vote == False:
+        # if majority_vote == False:
             # prediction by average
             # print("Avg probabilities are")
-            array = np.mean(predict_matrix, axis=1)
+            # array = np.mean(predict_matrix, axis=1)
             # for i in range(0, array.shape[0]):
             #     print("Before avg is", i, np.asarray(predict_matrix[i]))
             #     print("Average prediction", i, array[i])
 
-            return array
-        else:
-            return np.asarray(predict_array, dtype = np.intp)
+            # return array
+        # Paralellize mean
+        
+        cdef:
+            SIZE_t i, j
+            SIZE_t classes = self.max_n_classes
+            SIZE_t n_trees = self.n_trees
+            DOUBLE_t[:,:] avg_predict = np.zeros(shape=(X.shape[0], self.n_trees), dtype=np.float64)
+
+
+        for obs_no in prange(0, X.shape[0], nogil=True, schedule='dynamic', num_threads=n_threads):
+            # local_array[:] = np.zero
+            # max_value[:]
+            # max_index[:,:] = 
+            for i in range(0, n_trees):
+                for j in range(0, classes):
+                    avg_predict[obs_no, j] += predict_matrix[obs_no][i][j]
+        
+        """
+        cdef:
+            SIZE_t max_index, j
+            DOUBLE_t max_value
+            SIZE_t classes = self.max_n_classes
+            SIZE_t[:] array = np.empty(shape=(X.shape[0]), dtype=np.intp)
+        
+        for obs_no in prange(0, X.shape[0], nogil=True, schedule='dynamic', num_threads=n_threads):
+            #TODO: X is wrong
+            max_index = 0
+            max_value = 0
+            for j in range(0, classes):
+                # Ideally should be /n
+                if X[obs_no, j] > max_value:
+                    max_value = X[obs_no, j]
+                    max_index = j
+            array[obs_no] = max_index
+        return np.asarray(array)
+        """
+        return np.asarray(avg_predict, dtype=np.float64)
+        return np.mean(predict_matrix, axis = 1)
+        #else:
+        #    return np.asarray(predict_array, dtype = np.intp)
 
     cdef bint _is_class_node(self, PkdNode* pkdNode) nogil:
         return pkdNode.left_child == _TREE_LEAF
