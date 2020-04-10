@@ -200,6 +200,7 @@ def benchmark_mnist(n_estimators = 2048, interleave_depth = 2, batch_size = 1, n
 
 
 def compiled_trees(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8):
+    method_name = "compiled_trees"
     print("Calling compiled trees")
     # batches = [batch_size]
     batches = [1, 10, 100]
@@ -223,7 +224,8 @@ def compiled_trees(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_thre
         rep_lst = []
         for reps in range(repetitions):
             compiled_trees_lst = []
-
+            filename = method_name + "_" + str(reps) + "_" + str(batch_size) + ".csv"
+            f = open(filename, "w")
             runs = (int)(Y_test.shape[0]/batch_size)
 
             for i in range(0, runs):
@@ -231,9 +233,11 @@ def compiled_trees(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_thre
                 flush_cache(arr)
                 tstart = datetime.now()
                 compiled_predictor.predict(X_test[i:(i+1)*batch_size])
-                delta = (datetime.now() - tstart)  # ms
+                delta = (datetime.now() - tstart)
                 compiled_trees_lst.append(delta)
+                f.write(str(i) + ',' + str(delta.total_seconds() * 1000) + '\n')
 
+            f.close()
             op_time = reduce(add, compiled_trees_lst)/Y_test.shape[0]
             print("compiledTrees normalized operation (us) is ", op_time)
             rep_lst.append(op_time)
@@ -255,6 +259,8 @@ def compiled_trees(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_thre
     # print(np.sum(np.equal(Y_test, b)))
 
 def sklearn_naive(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8):
+    method_name = "sklean_naive"
+    # batches = [1]
     batches = [1, 10, 100]
     # batches = [10000, 5000, 1000, 500, 100, 10, 1]
     arr = np.empty(shape=(int)(cache_size/4), dtype=np.float32)  # 4bytes for n.float32
@@ -271,6 +277,8 @@ def sklearn_naive(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
         rep_lst = []
         for reps in range(repetitions):
             sklearn_naive_lst = []
+            filename = method_name + "_" + str(reps) + "_" + str(batch_size) + ".csv"
+            f = open(filename, "w")
             # Calculate for Sklearn Naive
             # ------------------------------------------------
             runs = (int)(Y_test.shape[0]/batch_size)
@@ -281,7 +289,8 @@ def sklearn_naive(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
                 clf.predict(X_test[i:(i+1)*batch_size])
                 delta = (datetime.now() - tstart)
                 sklearn_naive_lst.append(delta)
-
+                f.write(str(i) + ',' + str(delta.total_seconds() * 1000) + '\n')
+            f.close()
             op_time = reduce(add, sklearn_naive_lst)/Y_test.shape[0]
             print("Naive operation (us) is", op_time)
             rep_lst.append(op_time)
@@ -290,6 +299,7 @@ def sklearn_naive(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
 
 
 def packed_forest(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8):
+    method_name = "packed_forest"
     print("Calling PackedForest")
     # batches = [batch_size]
     batches = [1, 10, 100]
@@ -313,7 +323,8 @@ def packed_forest(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
         rep_lst = []
         for reps in range(repetitions):
             packed_forest_lst = []
-
+            filename = method_name + "_" + str(reps) + "_" + str(batch_size) + ".csv"
+            f = open(filename, "w")
             runs = (int)(Y_test.shape[0] / batch_size)
 
             for i in range(0, runs):
@@ -323,7 +334,9 @@ def packed_forest(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
                 frst.predict(X_test[i:(i+1)*batch_size], n_threads=n_threads)
                 delta = (datetime.now() - tstart)
                 packed_forest_lst.append(delta)
+                f.write(str(i) + ',' + str(delta.total_seconds()*1000) + '\n')
 
+            f.close()
             op_time = reduce(add, packed_forest_lst)/Y_test.shape[0]
             print("PackedForest normalized operation is", op_time)
             rep_lst.append(op_time)
