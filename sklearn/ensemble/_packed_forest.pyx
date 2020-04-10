@@ -314,19 +314,16 @@ cdef class PkdForest:
             # print("was assigned ", i)
 
     cpdef np.ndarray predict(self, object X_ndarray, bint majority_vote, SIZE_t n_threads):
+
         cdef const DOUBLE_t[:, :] X = X_ndarray
+
         # IF SKLEARN_OPENMP_PARALLELISM_ENABLED:
         #     print(openmp.omp_get_max_threads())
 
-        # Create loop for all observations
-        # TODO: NOTE, max_n_classes no assigned any value in code
         cdef SIZE_t[:,:] predict_array = np.zeros(shape=(X.shape[0], self.n_trees), dtype=np.intp)
         cdef DOUBLE_t[:,:,:] predict_matrix = np.zeros(shape=(X.shape[0], self.n_trees, self.max_n_classes), dtype=np.float64)
         # see bin size of 1st bin as it will be maximum, and differ by 1 tree from others(at max)
         cdef SIZE_t[:,:] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.intp)
-        # print("Curr_node shape is", curr_node.shape, curr_node.ndim)
-        # print("Predict shape is", predict_array.shape, predict_array.ndim)
-        # TODO: Add parallel support here
 
         cdef:
             SIZE_t bin_no, obs_no, tree_no, k
@@ -384,43 +381,42 @@ cdef class PkdForest:
             #     print("Average prediction", i, array[i])
 
             # return array
-        # Paralellize mean
-        
+
+        # Paralellize mean and argmax
         cdef:
-            SIZE_t i, j
+            SIZE_t i, j, max_index
+            DOUBLE_t max_value
             SIZE_t classes = self.max_n_classes
             SIZE_t n_trees = self.n_trees
             DOUBLE_t[:,:] avg_predict = np.zeros(shape=(X.shape[0], self.n_trees), dtype=np.float64)
+            SIZE_t[:] out_array = np.zeros(shape=(X.shape[0]), dtype=np.intp)
 
-            # TODO: make put ceil on n_threads for cases when n_obs < n_threads
-            # SIZE_t thread_max = n_threads if (X.shape[0] > n_threads) else X.shape[0]
+        if X.shape[0] < n_threads:
+            n_threads = X.shape[0]
+
+        # for obs_no in range(0, X.shape[0]):
         for obs_no in prange(0, X.shape[0], nogil=True, schedule='dynamic', num_threads=n_threads):
-            # local_array[:] = np.zero
-            # max_value[:]
-            # max_index[:,:] = 
-            for i in range(0, n_trees):
-                for j in range(0, classes):
-                    avg_predict[obs_no, j] += predict_matrix[obs_no][i][j]
-        
-        """
-        cdef:
-            SIZE_t max_index
-            DOUBLE_t max_value
-            SIZE_t[:] out_array = np.empty(shape=(X.shape[0]), dtype=np.intp)
-        
-        for obs_no in prange(0, X.shape[0], nogil=True, schedule='dynamic', num_threads=thread_max):
-            #TODO: X is wrong
             max_index = 0
             max_value = 0
+
+            # Replace with memset
+            # for j in range(0, classes):
+            #     avg_predict[obs_no, j] = 0
+
+            for i in range(0, n_trees):
+                for j in range(0, classes):
+                    avg_predict[obs_no][j] = avg_predict[obs_no][j] + predict_matrix[obs_no][i][j]
+
             for j in range(0, classes):
                 # Ideally should be /n
-                if avg_predict[obs_no, j] > max_value:
-                    max_value = avg_predict[obs_no, j]
+                if avg_predict[obs_no][j] > max_value:
+                    max_value = avg_predict[obs_no][j]
                     max_index = j
+
             out_array[obs_no] = max_index
-        
+
         return np.asarray(out_array)
-        """
+
         return np.asarray(avg_predict, dtype=np.float64)
         return np.mean(predict_matrix, axis = 1)
         #else:
