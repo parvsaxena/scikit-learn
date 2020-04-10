@@ -392,7 +392,8 @@ cdef class PkdForest:
             SIZE_t n_trees = self.n_trees
             DOUBLE_t[:,:] avg_predict = np.zeros(shape=(X.shape[0], self.n_trees), dtype=np.float64)
 
-
+            # TODO: make put ceil on n_threads for cases when n_obs < n_threads
+            # SIZE_t thread_max = n_threads if (X.shape[0] > n_threads) else X.shape[0]
         for obs_no in prange(0, X.shape[0], nogil=True, schedule='dynamic', num_threads=n_threads):
             # local_array[:] = np.zero
             # max_value[:]
@@ -403,22 +404,22 @@ cdef class PkdForest:
         
         """
         cdef:
-            SIZE_t max_index, j
+            SIZE_t max_index
             DOUBLE_t max_value
-            SIZE_t classes = self.max_n_classes
-            SIZE_t[:] array = np.empty(shape=(X.shape[0]), dtype=np.intp)
+            SIZE_t[:] out_array = np.empty(shape=(X.shape[0]), dtype=np.intp)
         
-        for obs_no in prange(0, X.shape[0], nogil=True, schedule='dynamic', num_threads=n_threads):
+        for obs_no in prange(0, X.shape[0], nogil=True, schedule='dynamic', num_threads=thread_max):
             #TODO: X is wrong
             max_index = 0
             max_value = 0
             for j in range(0, classes):
                 # Ideally should be /n
-                if X[obs_no, j] > max_value:
-                    max_value = X[obs_no, j]
+                if avg_predict[obs_no, j] > max_value:
+                    max_value = avg_predict[obs_no, j]
                     max_index = j
-            array[obs_no] = max_index
-        return np.asarray(array)
+            out_array[obs_no] = max_index
+        
+        return np.asarray(out_array)
         """
         return np.asarray(avg_predict, dtype=np.float64)
         return np.mean(predict_matrix, axis = 1)
