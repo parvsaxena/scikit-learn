@@ -61,5 +61,5 @@ cdef class PkdForest:
     cdef _copy_processed_node(self, PkdNode *pkdNode, NodeRecord &node, SIZE_t working_index, list trees)
     cdef _link_parent_to_node(self, PkdNode *pkdNode_p, SIZE_t working_index, NodeRecord &node)
     cpdef np.ndarray predict(self, object X, bint majority_vote, SIZE_t n_threads)
-    cdef inline (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, const DOUBLE_t[:,:] X) nogil
+    cdef inline (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, const DTYPE_t[:,:] X) nogil
     cdef SIZE_t _max_nodes_across_bin(self)

@@ -315,7 +315,7 @@ cdef class PkdForest:
 
     cpdef np.ndarray predict(self, object X_ndarray, bint majority_vote, SIZE_t n_threads):
 
-        cdef const DOUBLE_t[:, :] X = X_ndarray
+        cdef const DTYPE_t[:, :] X = X_ndarray
 
         # IF SKLEARN_OPENMP_PARALLELISM_ENABLED:
         #     print(openmp.omp_get_max_threads())
@@ -405,15 +405,15 @@ cdef class PkdForest:
                 for j in range(0, classes):
                     avg_predict[obs_no][j] = avg_predict[obs_no][j] + predict_matrix[obs_no][i][j]
 
-            for j in range(0, classes):
+            # for j in range(0, classes):
                 # Ideally should be /n
-                if avg_predict[obs_no][j] > max_value:
-                    max_value = avg_predict[obs_no][j]
-                    max_index = j
+            #     if avg_predict[obs_no][j] > max_value:
+            #         max_value = avg_predict[obs_no][j]
+            #         max_index = j
 
-            out_array[obs_no] = max_index
+            # out_array[obs_no] = max_index
 
-        return np.asarray(out_array)
+        # return np.asarray(out_array)
 
         return np.asarray(avg_predict, dtype=np.float64)
         return np.mean(predict_matrix, axis = 1)
@@ -424,7 +424,7 @@ cdef class PkdForest:
         return pkdNode.left_child == _TREE_LEAF
 
     # TODO: Avoid passing object X, pass reference
-    cdef inline (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, const DOUBLE_t[:,:] X) nogil:
+    cdef inline (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, const DTYPE_t[:,:] X) nogil:
         # TODO: Make sure this pkdNode is not class node
         if(X[obs_no][pkdNode.feature] <= pkdNode.threshold):
             return pkdNode.left_child, IS_LEFT

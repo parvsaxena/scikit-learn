@@ -64,6 +64,7 @@ class PackedForest:
 
         # print("LET US END THE GAME")
         # print("Shape is", X.shape)
+        X = np.asarray(X, dtype=np.float32)
         outputs = self._pkd_forest.predict(X, majority_vote, n_threads)
         if majority_vote:
             for i in range(0, outputs.shape[0]):
@@ -74,6 +75,6 @@ class PackedForest:
             a = np.apply_along_axis(np.bincount, axis=1, arr=outputs, minlength = np.max(outputs) +1)
             return np.argmax(a, axis=1)
         else:
-            return outputs
+            # return outputs
             # return self.classes_.take(np.argmax(outputs, axis=1), axis=0)
-            # return np.argmax(outputs, axis=1)
+            return np.argmax(outputs, axis=1)
