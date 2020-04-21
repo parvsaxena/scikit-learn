@@ -19,7 +19,7 @@ cdef struct PkdNode:
     SIZE_t left_child                       # Id of the left child of the node
     SIZE_t right_child                      # Id of the right child of the node
     SIZE_t feature                          # Feature used for splitting the node
-    DOUBLE_t threshold                      # Threshold value at the node
+    DTYPE_t threshold                      # Threshold value at the node
     # SIZE_t n_node_samples                   # Number of samples at the node
 
 cdef struct NodeRecord:

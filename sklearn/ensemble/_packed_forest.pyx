@@ -15,6 +15,7 @@ from libc.stdint cimport SIZE_MAX
 from libcpp.vector cimport vector
 from libcpp.deque cimport deque
 from cython.parallel import prange
+from ctypes import sizeof as csizeof
 IF SKLEARN_OPENMP_PARALLELISM_ENABLED:
     cimport openmp
 
@@ -32,6 +33,17 @@ from ..tree._utils cimport safe_realloc
 from ..tree._utils cimport sizet_ptr_to_ndarray
 from ..tree._tree cimport Tree
 
+# in this example, we use AVX2
+cdef extern from "immintrin.h":
+    ctypedef float  __m256
+    __m256 _mm256_loadu_ps (float *__P) nogil
+    __m256 _mm256_add_ps   (__m256 __A, __m256 __B) nogil
+    __m256 _mm256_mul_ps   (__m256 __A, __m256 __B) nogil
+    __m256 _mm256_fmadd_ps (__m256 __A, __m256 __B, __m256 __C) nogil
+    void   _mm256_store_ps (float *__P, __m256 __A) nogil
+
+
+
 TREE_LEAF = -1
 TREE_UNDEFINED = -2
 cdef SIZE_t _TREE_LEAF = TREE_LEAF
@@ -46,7 +58,7 @@ cdef class PkdForest:
         # TODO: This is unoptimized
         # as not knowing type beforehand hampers while passing list
         # cython performance, find workaround, if possible??
-
+        print("Sizeof PkdNode is", sizeof(int))
         self.n_trees = len(tree)
         self.n_bins = n_bins
         self.depth_interleaving = depth_interleaving
@@ -316,11 +328,6 @@ cdef class PkdForest:
     cpdef np.ndarray predict(self, object X_ndarray, bint majority_vote, SIZE_t n_threads):
 
         cdef const DTYPE_t[:, :] X = X_ndarray
-
-        # IF SKLEARN_OPENMP_PARALLELISM_ENABLED:
-        #     print(openmp.omp_get_max_threads())
-
-        # cdef SIZE_t[:,:] predict_array = np.zeros(shape=(X.shape[0], self.n_trees), dtype=np.intp)
         cdef DOUBLE_t[:,:,:] predict_matrix = np.zeros(shape=(X.shape[0], self.n_trees, self.max_n_classes), dtype=np.float64)
         cdef SIZE_t[:,:] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.intp)
 
@@ -329,56 +336,44 @@ cdef class PkdForest:
             SIZE_t internal_nodes_reached
             SIZE_t next_node, child
 
-        for bin_no in prange(0, self.n_bins, nogil=True, schedule='static', num_threads = n_threads):
-            # print("STarting code for bin no", bin_no)
-            for obs_no in range(0, X.shape[0]):
-                # print("observation no ", obs_no)
-                # print("observation is ", X[obs_no])
-
-                # Initialize to tree roots in the bins
-                for tree_no in range(0, self.bin_sizes[bin_no]):
-                    curr_node[bin_no][tree_no] = tree_no
-
-                # print("Curr node after initialization is", np.asarray(curr_node[bin_no,:]))
-
-                internal_nodes_reached = self.bin_sizes[bin_no]
-                while internal_nodes_reached > 0:
-                    internal_nodes_reached = 0
-                    # print("Curr node after initialization is ", np.asarray(curr_node[bin_no,:]))
+        if X.shape[0] == 1:
+            for obs_no in range(0, 1):
+                for bin_no in prange(0, self.n_bins, nogil=True, schedule='static', num_threads = n_threads):
+                    # Initialize to tree roots in the bins
                     for tree_no in range(0, self.bin_sizes[bin_no]):
-                        # print("Tree no", tree_no)
-                        # print("Printing node", self.node[bin_no][curr_node[bin_no][tree_no]])
-                        if not self._is_class_node(&self.node[bin_no][curr_node[bin_no][tree_no]]):
-                            next_node, child = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
-                            if self._is_class_node(&self.node[bin_no][next_node]):
-                                # print("Class node found!!")
-                                # for k in range(0, self.max_n_classes):
-                                    # predict_matrix[obs_no][k] += self.value[bin_no][curr_node[bin_no][tree_no]][child][k]
-                                predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]] = self.value[bin_no][curr_node[bin_no][tree_no]][child]
-                                # print("Writing for original tree no ", tree_no + self.bin_offsets[bin_no])
-                            curr_node[bin_no,tree_no] = next_node
-                            # print("Next node and child are", next_node, child)
-                            # print("Predict matrix here is ", np.asarray(predict_matrix[obs_no,tree_no + self.bin_offsets[bin_no]]))
-                            internal_nodes_reached = internal_nodes_reached + 1
-                            # print("current node now is", curr_node[bin_no,tree_no])
+                        curr_node[bin_no][tree_no] = tree_no
 
-                # time to predict classes
-                # if majority_vote == True:
-                #     for tree_no in range(0, self.bin_sizes[bin_no]):
-                #         predict_array[obs_no, self.bin_offsets[bin_no] + tree_no] = self.node[bin_no][curr_node[bin_no,tree_no]].right_child
+                    internal_nodes_reached = self.bin_sizes[bin_no]
+                    while internal_nodes_reached > 0:
+                        internal_nodes_reached = 0
+                        for tree_no in range(0, self.bin_sizes[bin_no]):
+                            if not self._is_class_node(&self.node[bin_no][curr_node[bin_no][tree_no]]):
+                                next_node, child = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
+                                if self._is_class_node(&self.node[bin_no][next_node]):
+                                    predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]] = self.value[bin_no][curr_node[bin_no][tree_no]][child]
+                                curr_node[bin_no,tree_no] = next_node
+                                internal_nodes_reached = internal_nodes_reached + 1
 
+            return np.mean(predict_matrix, axis = 1)
 
-            # print("Prediction internally is", np.asarray(predict_array[obs_no,:]))
+        else:
+            for bin_no in prange(0, self.n_bins, nogil=True, schedule='static', num_threads = n_threads):
+                for obs_no in range(0, X.shape[0]):
+                    # Initialize to tree roots in the bins
+                    for tree_no in range(0, self.bin_sizes[bin_no]):
+                        curr_node[bin_no][tree_no] = tree_no
 
-        # if majority_vote == False:
-            # prediction by average
-            # print("Avg probabilities are")
-            # array = np.mean(predict_matrix, axis=1)
-            # for i in range(0, array.shape[0]):
-            #     print("Before avg is", i, np.asarray(predict_matrix[i]))
-            #     print("Average prediction", i, array[i])
+                    internal_nodes_reached = self.bin_sizes[bin_no]
+                    while internal_nodes_reached > 0:
+                        internal_nodes_reached = 0
+                        for tree_no in range(0, self.bin_sizes[bin_no]):
+                            if not self._is_class_node(&self.node[bin_no][curr_node[bin_no][tree_no]]):
+                                next_node, child = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
+                                if self._is_class_node(&self.node[bin_no][next_node]):
+                                    predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]] = self.value[bin_no][curr_node[bin_no][tree_no]][child]
+                                curr_node[bin_no,tree_no] = next_node
+                                internal_nodes_reached = internal_nodes_reached + 1
 
-            # return array
 
         # Paralellize mean and argmax
         cdef:
@@ -416,9 +411,7 @@ cdef class PkdForest:
         # return np.asarray(out_array)
 
         return np.asarray(avg_predict, dtype=np.float64)
-        return np.mean(predict_matrix, axis = 1)
-        #else:
-        #    return np.asarray(predict_array, dtype = np.intp)
+
 
     cdef inline bint _is_class_node(self, PkdNode* pkdNode) nogil:
         return pkdNode.left_child == _TREE_LEAF
