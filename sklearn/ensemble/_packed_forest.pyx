@@ -14,7 +14,7 @@ from libc.string cimport memset
 from libc.stdint cimport SIZE_MAX
 from libcpp.vector cimport vector
 from libcpp.deque cimport deque
-from cython.parallel import prange
+from cython.parallel import prange, parallel
 from ctypes import sizeof as csizeof
 IF SKLEARN_OPENMP_PARALLELISM_ENABLED:
     cimport openmp
@@ -33,16 +33,21 @@ from ..tree._utils cimport safe_realloc
 from ..tree._utils cimport sizet_ptr_to_ndarray
 from ..tree._tree cimport Tree
 
-# in this example, we use AVX2
+# cdef extern from "x86intrin.h":
 cdef extern from "immintrin.h":
     ctypedef float  __m256
-    __m256 _mm256_loadu_ps (float *__P) nogil
-    __m256 _mm256_add_ps   (__m256 __A, __m256 __B) nogil
-    __m256 _mm256_mul_ps   (__m256 __A, __m256 __B) nogil
-    __m256 _mm256_fmadd_ps (__m256 __A, __m256 __B, __m256 __C) nogil
-    void   _mm256_store_ps (float *__P, __m256 __A) nogil
-
-
+    ctypedef double __m256d
+    __m256d _mm256_loadu_pd (double *__P) nogil
+    __m256d _mm256_load_pd (double *__P) nogil
+    __m256d _mm256_add_pd   (__m256d __A, __m256d __B) nogil
+    __m256d _mm256_mul_pd   (__m256d __A, __m256d __B) nogil
+    __m256d _mm256_fmadd_pd (__m256d __A, __m256d __B, __m256d __C) nogil
+    __m256d _mm256_cmp_pd (__m256d __X, __m256d __Y, const int __P) nogil
+    void   _mm256_store_pd (double *__P, __m256d __A) nogil
+    void   _mm256_storeu_pd (double *__P, __m256d __A) nogil
+    __m256d _mm256_blendv_pd(__m256d __A, __m256d __B, __m256d __C) nogil
+    __m256d _mm256_setzero_pd() nogil
+    enum: _CMP_LE_OS
 
 TREE_LEAF = -1
 TREE_UNDEFINED = -2
@@ -329,19 +334,108 @@ cdef class PkdForest:
 
         cdef const DTYPE_t[:, :] X = X_ndarray
         cdef DOUBLE_t[:,:,:] predict_matrix = np.zeros(shape=(X.shape[0], self.n_trees, self.max_n_classes), dtype=np.float64)
-        cdef SIZE_t[:,:] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.intp)
-
+        cdef SIZE_t[:,::1] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.intp)
+        # print(self.bin_sizes[0])
+        # print("Getting into predict\n")
+        # print("double size", sizeof(double))
+        #TODO:: base stride on instruction
         cdef:
-            SIZE_t bin_no, obs_no, tree_no, k
-            SIZE_t internal_nodes_reached
+            SIZE_t bin_no, obs_no, tree_no, k, steps
+            SIZE_t internal_nodes_reached, offset
             SIZE_t next_node, child
+            #TODO: cant seem to use union trick here, unions allowed only in pxd?
+            __m256d data_lane = _mm256_setzero_pd()
+            __m256d th_lane = _mm256_setzero_pd()
+            __m256d l_lane = _mm256_setzero_pd()
+            __m256d rt_lane = _mm256_setzero_pd()
+            __m256d mask = _mm256_setzero_pd()
+            SIZE_t stride = 4
+            SIZE_t depth = 0         
+            # float *data = <float*> malloc(self.n_bins*stride*sizeof(float))
+            # TODO: Make dynamic
+            double[4] data
+            double[4] threshold
+            double[4] left
+            double[4] right
+            SIZE_t interleaving_depth = self.depth_interleaving
 
+        # print(type(data_lane))
+        """
+        with nogil:
+            data_lane = _mm256_load_ps(&data[0])
+            th_lane = _mm256_load_ps(&threshold[0])
+        # abc = _mm256_cmp_ps(data_lane, th_lane, _CMP_LE_OS)
+        
+        with nogil:
+            data_lane = _mm256_setzero_ps()
+            obs_no = 0
+            bin_no = 0
+            for k in range(0, stride):
+                data[bin_no*k] = X[obs_no][self.node[bin_no][k].feature]
+                threshold[k] = self.node[bin_no][k].threshold
+            data_lane = _mm256_load_ps(&data[bin_no])
+            th_lane = _mm256_load_ps(&threshold[bin_no])
+        """
         if X.shape[0] == 1:
+            
             for obs_no in range(0, 1):
-                for bin_no in prange(0, self.n_bins, nogil=True, schedule='static', num_threads = n_threads):
+                for bin_no in range(0, self.n_bins):
+                # for bin_no in prange(0, self.n_bins, nogil=True, schedule='static', num_threads = n_threads):
+                    # data_lane = _mm256_load_ps(&data[0]) + 0.0
+                    # data_lane = _mm256_setzero_ps()
                     # Initialize to tree roots in the bins
                     for tree_no in range(0, self.bin_sizes[bin_no]):
                         curr_node[bin_no][tree_no] = tree_no
+                    
+                    # print(np.asarray(curr_node[bin_no]))
+
+                    depth = 0
+                    while depth <= 0:
+                    # while depth <= interleaving_depth:
+                        # Load data 
+                        # print(np.asarray(X[obs_no]))
+                        for step in range( self.bin_sizes[bin_no]/stride):
+                            print("Steps", step)
+                            for k in range(0, stride):
+                                # change i to i*()
+                                offset = step*stride
+                                data[k] = X[obs_no][self.node[bin_no][offset+k].feature]
+                                threshold[k] = self.node[bin_no][offset+k].threshold
+                                left[k] = self.node[bin_no][offset+k].left_child
+                                right[k] = self.node[bin_no][offset+k].right_child
+                                # print(self.node[bin_no][k].feature)
+                                # print(self.node[bin_no][k].threshold)
+                                # print("data", data[k])
+                            # Peform comparison
+                            # print("Data", np.asarray(data))
+                            # print("Th", np.asarray(threshold))
+                            # print("left", np.asarray(left))
+                            # print("right", np.asarray(right))
+                            data_lane = _mm256_loadu_pd(&data[0])
+                            th_lane = _mm256_loadu_pd(&threshold[0])
+                            l_lane = _mm256_loadu_pd(&left[0])
+                            rt_lane = _mm256_loadu_pd(&right[0])
+                            # a <= b
+                            mask = _mm256_cmp_pd(data_lane, th_lane, _CMP_LE_OS)
+                            # If mask T, second selected, else first
+                            data_lane = _mm256_blendv_pd(rt_lane, l_lane, mask)
+                            # The ones with mask go left, rest go right
+                            # print(mask)
+                            _mm256_storeu_pd(&threshold[0], data_lane)
+                        
+                            # curr_node[bin_no] = threshold
+                            # print(np.asarray(threshold))
+                            #TODO: Figure out how to achieve this
+                            # _mm256_store_pd(<double*>&curr_node[bin_no][0], data_lane)
+                            # print("Reached here")
+                            # print(np.asarray(curr_node[bin_no]))
+                            for k in range(0, stride):
+                                offset = step*stride
+                                curr_node[bin_no][offset+k] = <SIZE_t>threshold[k]
+                        
+                            print(np.asarray(curr_node[bin_no]))
+                            # break
+                        depth = depth+1
 
                     internal_nodes_reached = self.bin_sizes[bin_no]
                     while internal_nodes_reached > 0:
@@ -353,9 +447,9 @@ cdef class PkdForest:
                                     predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]] = self.value[bin_no][curr_node[bin_no][tree_no]][child]
                                 curr_node[bin_no,tree_no] = next_node
                                 internal_nodes_reached = internal_nodes_reached + 1
-
+            
             return np.mean(predict_matrix, axis = 1)
-
+        
         else:
             for bin_no in prange(0, self.n_bins, nogil=True, schedule='static', num_threads = n_threads):
                 for obs_no in range(0, X.shape[0]):
@@ -411,6 +505,102 @@ cdef class PkdForest:
         # return np.asarray(out_array)
 
         return np.asarray(avg_predict, dtype=np.float64)
+
+    cpdef np.ndarray predict_base_serial(self, object X_ndarray, bint majority_vote, SIZE_t n_threads):
+
+        cdef const DTYPE_t[:, :] X = X_ndarray
+        cdef DOUBLE_t[:,:,:] predict_matrix = np.zeros(shape=(X.shape[0], self.n_trees, self.max_n_classes), dtype=np.float64)
+        cdef SIZE_t[:,:] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.intp)
+        
+        
+        #TODO:: base stride on instruction
+        cdef:
+            SIZE_t bin_no, obs_no, tree_no, k
+            SIZE_t internal_nodes_reached
+            SIZE_t next_node, child
+
+
+        if X.shape[0] == 1:
+            
+            for obs_no in range(0, 1):
+                for bin_no in range(0, self.n_bins):
+                # for bin_no in prange(0, self.n_bins, nogil=True, schedule='static', num_threads = n_threads):
+                    # data_lane = _mm256_load_ps(&data[0]) + 0.0
+                    # data_lane = _mm256_setzero_ps()
+                    # Initialize to tree roots in the bins
+                    for tree_no in range(0, self.bin_sizes[bin_no]):
+                        curr_node[bin_no][tree_no] = tree_no
+                   
+                    internal_nodes_reached = self.bin_sizes[bin_no]
+                    while internal_nodes_reached > 0:
+                        internal_nodes_reached = 0
+                        for tree_no in range(0, self.bin_sizes[bin_no]):
+                            if not self._is_class_node(&self.node[bin_no][curr_node[bin_no][tree_no]]):
+                                next_node, child = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
+                                if self._is_class_node(&self.node[bin_no][next_node]):
+                                    predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]] = self.value[bin_no][curr_node[bin_no][tree_no]][child]
+                                curr_node[bin_no,tree_no] = next_node
+                                internal_nodes_reached = internal_nodes_reached + 1
+            
+            return np.mean(predict_matrix, axis = 1)
+        
+        else:
+            for bin_no in range(0, self.n_bins):
+            # for bin_no in prange(0, self.n_bins, nogil=True, schedule='static', num_threads = n_threads):
+                for obs_no in range(0, X.shape[0]):
+                    # Initialize to tree roots in the bins
+                    for tree_no in range(0, self.bin_sizes[bin_no]):
+                        curr_node[bin_no][tree_no] = tree_no
+
+                    internal_nodes_reached = self.bin_sizes[bin_no]
+                    while internal_nodes_reached > 0:
+                        internal_nodes_reached = 0
+                        for tree_no in range(0, self.bin_sizes[bin_no]):
+                            if not self._is_class_node(&self.node[bin_no][curr_node[bin_no][tree_no]]):
+                                next_node, child = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
+                                if self._is_class_node(&self.node[bin_no][next_node]):
+                                    predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]] = self.value[bin_no][curr_node[bin_no][tree_no]][child]
+                                curr_node[bin_no,tree_no] = next_node
+                                internal_nodes_reached = internal_nodes_reached + 1
+
+            return np.mean(predict_matrix, axis = 1)
+        # Paralellize mean and argmax
+        cdef:
+            SIZE_t i, j, max_index
+            DOUBLE_t max_value
+            SIZE_t classes = self.max_n_classes
+            SIZE_t n_trees = self.n_trees
+            DOUBLE_t[:,:] avg_predict = np.zeros(shape=(X.shape[0], self.n_trees), dtype=np.float64)
+            SIZE_t[:] out_array = np.zeros(shape=(X.shape[0]), dtype=np.intp)
+
+        if X.shape[0] < n_threads:
+            n_threads = X.shape[0]
+
+        # for obs_no in range(0, X.shape[0]):
+        for obs_no in prange(0, X.shape[0], nogil=True, schedule='dynamic', num_threads=n_threads):
+            max_index = 0
+            max_value = 0
+
+            # Replace with memset
+            # for j in range(0, classes):
+            #     avg_predict[obs_no, j] = 0
+
+            for i in range(0, n_trees):
+                for j in range(0, classes):
+                    avg_predict[obs_no][j] = avg_predict[obs_no][j] + predict_matrix[obs_no][i][j]
+
+            # for j in range(0, classes):
+                # Ideally should be /n
+            #     if avg_predict[obs_no][j] > max_value:
+            #         max_value = avg_predict[obs_no][j]
+            #         max_index = j
+
+            # out_array[obs_no] = max_index
+
+        # return np.asarray(out_array)
+
+        return np.asarray(avg_predict, dtype=np.float64)
+
 
 
     cdef inline bint _is_class_node(self, PkdNode* pkdNode) nogil:

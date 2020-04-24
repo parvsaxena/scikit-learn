@@ -63,3 +63,4 @@ cdef class PkdForest:
     cpdef np.ndarray predict(self, object X, bint majority_vote, SIZE_t n_threads)
     cdef inline (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, const DTYPE_t[:,:] X) nogil
     cdef SIZE_t _max_nodes_across_bin(self)
+    cpdef np.ndarray predict_base_serial(self, object X, bint majority_vote, SIZE_t n_threads)

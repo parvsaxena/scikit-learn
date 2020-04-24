@@ -14,7 +14,7 @@ def configuration(parent_package="", top_path=None):
                          sources=["_packed_forest.pyx"],
                          include_dirs=[numpy.get_include()],
                          language="c++",
-                         extra_compile_args=['-fopenmp', '-O3', '-ffast-math'],
+                         extra_compile_args=['-fopenmp', '-O3', '-ffast-math', '-march=native', '-mavx', '-mfma'],
                          extra_link_args=['-fopenmp'],)
 
     config.add_subpackage("tests")
