@@ -5,6 +5,7 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.ensemble import PackedForest
 import sys
 import compiledtrees
+import multiprocessing
 
 """
 iris = load_iris()
@@ -19,7 +20,7 @@ mnist = fetch_openml('mnist_784')
 X = mnist.data[:1000]
 Y = mnist.target[:1000]
 
-clf = RandomForestClassifier(n_estimators=8)
+clf = RandomForestClassifier(n_estimators=128)
 # clf = RandomForestClassifier(n_estimators = 3, max_depth = 2, random_state = 19832312)
 # clf = RandomForestClassifier(n_estimators = 2, max_depth = 2, random_state = int(sys.argv[1]))
 
@@ -27,7 +28,7 @@ clf.fit(X,Y)
 #for i in range(0,len(clf.estimators_)):
 #    clf.estimators_[i].tree_.predict(np.asarray(X, dtype=np.float32))
 
-frst = PackedForest(forest_classifier=clf, interleave_depth=2, n_bins=2)
+frst = PackedForest(forest_classifier=clf, interleave_depth=4, n_bins=multiprocessing.cpu_count())
 
 # compiled_predictor = compiledtrees.CompiledRegressionPredictor(clf)
 # predictions = compiled_predictor.predict(X)
@@ -44,7 +45,7 @@ print (a)
 print (b)
 
 
-for i in range(4):
+for i in range(1000):
     a = clf.predict(X[i:i+1])
     b = frst.predict(X[i:i+1])
     b = np.asarray(b, np.intp)

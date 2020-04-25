@@ -388,14 +388,15 @@ cdef class PkdForest:
                         curr_node[bin_no][tree_no] = tree_no
                     
                     # print(np.asarray(curr_node[bin_no]))
-
+                    #TODO: Handle cases when bin_size%stride!=0
+                    #TODO: Handle cases when leaf node in intereaving_depth
                     depth = 0
                     while depth <= 0:
                     # while depth <= interleaving_depth:
                         # Load data 
                         # print(np.asarray(X[obs_no]))
                         for step in range( self.bin_sizes[bin_no]/stride):
-                            print("Steps", step)
+                            # print("Steps", step)
                             for k in range(0, stride):
                                 # change i to i*()
                                 offset = step*stride
@@ -433,7 +434,7 @@ cdef class PkdForest:
                                 offset = step*stride
                                 curr_node[bin_no][offset+k] = <SIZE_t>threshold[k]
                         
-                            print(np.asarray(curr_node[bin_no]))
+                            # print(np.asarray(curr_node[bin_no]))
                             # break
                         depth = depth+1
 
