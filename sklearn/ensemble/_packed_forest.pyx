@@ -63,7 +63,7 @@ cdef class PkdForest:
         # TODO: This is unoptimized
         # as not knowing type beforehand hampers while passing list
         # cython performance, find workaround, if possible??
-        print("Sizeof PkdNode is", sizeof(int))
+        print("Sizeof PkdNode is", sizeof(PkdNode))
         self.n_trees = len(tree)
         self.n_bins = n_bins
         self.depth_interleaving = depth_interleaving
@@ -81,6 +81,11 @@ cdef class PkdForest:
         safe_realloc(&self.working_index, self.n_bins)
 
         self.node = <PkdNode**> malloc(self.n_bins * sizeof(PkdNode*))
+        # Set alternate to PdkNode
+        self.left_child = <DOUBLE_t**> malloc(self.n_bins * sizeof(DOUBLE_t*))
+        self.right_child = <DOUBLE_t**> malloc(self.n_bins * sizeof(DOUBLE_t*))
+        self.feature = <SIZE_t**> malloc(self.n_bins * sizeof(SIZE_t*))
+        self.threshold = <DOUBLE_t**> malloc(self.n_bins * sizeof(DOUBLE_t*))
 
         # Loop to calc nodes in bins
         for i in range(0, self.n_bins):
@@ -138,6 +143,14 @@ cdef class PkdForest:
 
     cdef _create_bin(self, list trees, SIZE_t bin_no) except +:
         self.node[bin_no] = <PkdNode*>malloc(self.n_nodes_per_bin[bin_no] * sizeof(PkdNode))
+        # print("SIZEOF SIZE_t", sizeof(SIZE_t))
+        # print("SIZEOF SIZE_t", sizeof(DOUBLE_t))
+        self.left_child[bin_no] = <DOUBLE_t*>malloc(self.n_nodes_per_bin[bin_no] * sizeof(DOUBLE_t))
+        self.right_child[bin_no] = <DOUBLE_t*>malloc(self.n_nodes_per_bin[bin_no] * sizeof(DOUBLE_t))
+        self.feature[bin_no] = <SIZE_t*>malloc(self.n_nodes_per_bin[bin_no] * sizeof(SIZE_t))
+        self.threshold[bin_no] = <DOUBLE_t*>malloc(self.n_nodes_per_bin[bin_no] * sizeof(DOUBLE_t))
+
+
         #self.node[bin_no][0].n_node_samples = 1
         # print(self.node[bin_no][0].n_node_samples)
 
@@ -194,6 +207,20 @@ cdef class PkdForest:
             else:
                 # print("Calling process node with True")
                 self._process_node(deq.front(), deq, trees, bin_no, True)
+        
+        self.copy_PkdNode_structure(bin_no)
+
+    cdef copy_PkdNode_structure(self, SIZE_t bin_no):
+        # print("Bin no", bin_no)
+        for idx in range(0, self.n_nodes_per_bin[bin_no]):
+            # print("idx, nodes per bin", idx, self.n_nodes_per_bin[bin_no])
+            self.left_child[bin_no][idx] = self.node[bin_no][idx].left_child
+            self.right_child[bin_no][idx] = self.node[bin_no][idx].right_child
+            # print("b")
+            self.feature[bin_no][idx] = self.node[bin_no][idx].feature
+            #print("c")
+            self.threshold[bin_no][idx] = self.node[bin_no][idx].threshold
+            #print("d")
 
     # Copy node from tree
     cdef _copy_node(self, PkdNode* pkdNode, object tree, SIZE_t node_id):
@@ -334,7 +361,9 @@ cdef class PkdForest:
 
         cdef const DTYPE_t[:, :] X = X_ndarray
         cdef DOUBLE_t[:,:,:] predict_matrix = np.zeros(shape=(X.shape[0], self.n_trees, self.max_n_classes), dtype=np.float64)
-        cdef SIZE_t[:,::1] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.intp)
+        # cdef SIZE_t[:,::1] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.intp)
+        cdef DOUBLE_t[:,::1] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.float64)
+
         # print(self.bin_sizes[0])
         # print("Getting into predict\n")
         # print("double size", sizeof(double))
@@ -376,10 +405,12 @@ cdef class PkdForest:
             data_lane = _mm256_load_ps(&data[bin_no])
             th_lane = _mm256_load_ps(&threshold[bin_no])
         """
-        if X.shape[0] == 1:
-            
-            for obs_no in range(0, 1):
-                for bin_no in range(0, self.n_bins):
+        if 1==1:
+        # TODO: get this back
+        # if X.shape[0] == 1:
+            for bin_no in range(0, self.n_bins):
+           
+                for obs_no in range(0, 1):
                 # for bin_no in prange(0, self.n_bins, nogil=True, schedule='static', num_threads = n_threads):
                     # data_lane = _mm256_load_ps(&data[0]) + 0.0
                     # data_lane = _mm256_setzero_ps()
@@ -395,57 +426,99 @@ cdef class PkdForest:
                     # while depth <= interleaving_depth:
                         # Load data 
                         # print(np.asarray(X[obs_no]))
-                        for step in range( self.bin_sizes[bin_no]/stride):
+                        for step in range(self.bin_sizes[bin_no]/stride):
                             # print("Steps", step)
+                            offset = step*stride
                             for k in range(0, stride):
                                 # change i to i*()
-                                offset = step*stride
-                                data[k] = X[obs_no][self.node[bin_no][offset+k].feature]
-                                threshold[k] = self.node[bin_no][offset+k].threshold
-                                left[k] = self.node[bin_no][offset+k].left_child
-                                right[k] = self.node[bin_no][offset+k].right_child
+                                # data[k] = X[obs_no][self.node[bin_no][offset+k].feature]
+                                data[k] = X[obs_no][self.feature[bin_no][offset+k]]
+                                #threshold[k] = self.node[bin_no][offset+k].threshold
+                                # left[k] = self.node[bin_no][offset+k].left_child
+                                # right[k] = self.node[bin_no][offset+k].right_child
+                                # left[k] = self.left_child[bin_no][offset+k]
+                                # right[k] = self.right_child[bin_no][offset+k]
+
                                 # print(self.node[bin_no][k].feature)
                                 # print(self.node[bin_no][k].threshold)
                                 # print("data", data[k])
+                                """
+                                print(self.node[bin_no][offset+k].feature, 
+                                      self.node[bin_no][offset+k].threshold,
+                                      self.node[bin_no][offset+k].left_child,
+                                      self.node[bin_no][offset+k].right_child)
+
+                                print(self.feature[bin_no][offset+k], self.threshold[bin_no][offset+k], self.left_child[bin_no][offset+k], self.right_child[bin_no][offset+k])
+                                """
+                                # print(self.threshold[bin_no][offset+k])
+                                # print(self.left_child[bin_no][offset+k])
+                                # print(self.right_child[bin_no][offset+k])
                             # Peform comparison
                             # print("Data", np.asarray(data))
                             # print("Th", np.asarray(threshold))
                             # print("left", np.asarray(left))
                             # print("right", np.asarray(right))
+                            
                             data_lane = _mm256_loadu_pd(&data[0])
-                            th_lane = _mm256_loadu_pd(&threshold[0])
-                            l_lane = _mm256_loadu_pd(&left[0])
-                            rt_lane = _mm256_loadu_pd(&right[0])
+                            # th_lane = _mm256_loadu_pd(&threshold[0])
+                            # l_lane = _mm256_loadu_pd(&left[0])
+                            # rt_lane = _mm256_loadu_pd(&right[0])
+                            # memcpy(&left[0], &self.left_child[bin_no][offset], sizeof(double)*stride)
+                            # print("New left is")
+                            # print(left[0], left[1], left[2], left[3])
+                            th_lane = _mm256_loadu_pd(&self.threshold[bin_no][offset])
+                            l_lane = _mm256_loadu_pd(&self.left_child[bin_no][offset])
+                            rt_lane = _mm256_loadu_pd(&self.right_child[bin_no][offset])
+                            # print("{0:x}".format(<unsigned long>&self.right_child[bin_no][offset]))
+                            # print("{0:x}".format(<unsigned long>&self.right_child[bin_no][offset+1]))
+                            # print("{0:x}".format(<unsigned long>&self.right_child[bin_no][offset+2]))
+
+                            # print("{0:x}".format(<unsigned long><double*>&self.right_child[bin_no][offset]))
+                            # print("{0:x}".format(<unsigned long><double*>&self.right_child[bin_no][offset+1]))
+                            # print("{0:x}".format(<unsigned long><double*>&self.right_child[bin_no][offset+2]))
+
                             # a <= b
                             mask = _mm256_cmp_pd(data_lane, th_lane, _CMP_LE_OS)
                             # If mask T, second selected, else first
                             data_lane = _mm256_blendv_pd(rt_lane, l_lane, mask)
                             # The ones with mask go left, rest go right
                             # print(mask)
+                            
+                            """
                             _mm256_storeu_pd(&threshold[0], data_lane)
-                        
+                            """
+                            # _mm256_storeu_pd(&threshold[0], data_lane)
+                            _mm256_storeu_pd(&curr_node[bin_no][offset], data_lane)
+
                             # curr_node[bin_no] = threshold
                             # print(np.asarray(threshold))
+                            # print(np.asarray(curr_node[bin_no][offset:offset+stride]))
                             #TODO: Figure out how to achieve this
                             # _mm256_store_pd(<double*>&curr_node[bin_no][0], data_lane)
                             # print("Reached here")
                             # print(np.asarray(curr_node[bin_no]))
+                            
+                            
+                            """
                             for k in range(0, stride):
-                                offset = step*stride
-                                curr_node[bin_no][offset+k] = <SIZE_t>threshold[k]
-                        
+                                # offset = step*stride
+                                # print("cur_nodes", threshold[k])
+                                # curr_node[bin_no][offset+k] = <SIZE_t>threshold[k]
+                                curr_node[bin_no][offset+k] = threshold[k]
+                            """
                             # print(np.asarray(curr_node[bin_no]))
                             # break
                         depth = depth+1
-
+                    
+                    # print(np.asarray(curr_node[bin_no]))
                     internal_nodes_reached = self.bin_sizes[bin_no]
                     while internal_nodes_reached > 0:
                         internal_nodes_reached = 0
                         for tree_no in range(0, self.bin_sizes[bin_no]):
-                            if not self._is_class_node(&self.node[bin_no][curr_node[bin_no][tree_no]]):
-                                next_node, child = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
+                            if not self._is_class_node(&self.node[bin_no][<SIZE_t>curr_node[bin_no][tree_no]]):
+                                next_node, child = self._find_next_node(&self.node[bin_no][<SIZE_t>curr_node[bin_no,tree_no]], obs_no, X)
                                 if self._is_class_node(&self.node[bin_no][next_node]):
-                                    predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]] = self.value[bin_no][curr_node[bin_no][tree_no]][child]
+                                    predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]] = self.value[bin_no][<SIZE_t>curr_node[bin_no][tree_no]][child]
                                 curr_node[bin_no,tree_no] = next_node
                                 internal_nodes_reached = internal_nodes_reached + 1
             

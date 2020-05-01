@@ -53,6 +53,8 @@ for i in range(1000):
     # print(a, b)
     if a[0]!=b[0]:
         print("Wrong")
+
+
 """
 print(a)
 print(np.asarray(b, np.int))

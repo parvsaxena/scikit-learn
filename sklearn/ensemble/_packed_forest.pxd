@@ -19,7 +19,7 @@ cdef struct PkdNode:
     SIZE_t left_child                       # Id of the left child of the node
     SIZE_t right_child                      # Id of the right child of the node
     SIZE_t feature                          # Feature used for splitting the node
-    DTYPE_t threshold                      # Threshold value at the node
+    DTYPE_t threshold                       # Threshold value at the node
     # SIZE_t n_node_samples                   # Number of samples at the node
 
 cdef struct NodeRecord:
@@ -42,7 +42,12 @@ cdef class PkdForest:
     cdef SIZE_t* working_index              # working index for node in bin []
     # TODO: Assign the variable and replace
     cdef SIZE_t max_n_classes              # Maximum no of classes in forest
-    cdef DOUBLE_t[:,:,:,:] value            # Value array
+    cdef DOUBLE_t[:,:,:,:] value           # Value array
+    # Alternate structure to PkdNode
+    cdef DOUBLE_t** left_child                 
+    cdef DOUBLE_t** right_child
+    cdef SIZE_t** feature
+    cdef DOUBLE_t** threshold
 
     # Methods
     cdef _calc_bin_sizes(self)
@@ -64,3 +69,4 @@ cdef class PkdForest:
     cdef inline (SIZE_t, SIZE_t) _find_next_node(self, PkdNode* pkdNode, SIZE_t obs_no, const DTYPE_t[:,:] X) nogil
     cdef SIZE_t _max_nodes_across_bin(self)
     cpdef np.ndarray predict_base_serial(self, object X, bint majority_vote, SIZE_t n_threads)
+    cdef copy_PkdNode_structure(self, SIZE_t bin_no)

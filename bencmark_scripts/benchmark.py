@@ -17,7 +17,7 @@ import time
 custom_data_home = '.'
 toolchain = 'gcc'
 cache_size = (1024*1024)*8      # MB * 8
-repetitions = 2
+repetitions = 3
 
 
 def flush_cache(arr):
@@ -148,20 +148,24 @@ def benchmark_cifar10(n_estimators = 2048, interleave_depth = 2, batch_size = 1,
     print(X_train.shape, X_test.shape, Y_train.shape, Y_test.shape)
     # X = np.asarray(higgs.data[:, :20], dtype=np.float32)
     # Y = higgs.target
-
+    print("===================================")
+    print("===================================")
+    print("No of estimators are", n_estimators)
+    print("===================================")
+    print("===================================")
     clf = RandomForestClassifier(n_estimators=n_estimators)
     print("Fitting")
     clf.fit(X_train, Y_train)
     print("Classifier order is", clf.estimators_[0].classes_)
     
     print("Interleaving is ", interleave_depth)
-    sklearn_naive(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+    # sklearn_naive(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
     packed_forest(clf=clf, X_test=X_test, Y_test=Y_test,  interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
     # tree_lite(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads, annotations=False, quantization=False)
 
-    compiled_trees(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
+    # compiled_trees(clf=clf, X_test=X_test, Y_test=Y_test, interleave_depth=interleave_depth, batch_size=batch_size, n_threads=n_threads)
 
 
 def benchmark_mnist(n_estimators = 2048, interleave_depth = 2, batch_size = 1, n_threads = 8):
@@ -260,7 +264,7 @@ def compiled_trees(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_thre
 
 def sklearn_naive(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8):
     method_name = "sklean_naive"
-    batches = [1]
+    batches = [1, 10, 20, 100, 500, 1000]
     # batches = [1, 10, 100]
     # batches = [10000, 5000, 1000, 500, 100, 10, 1]
     arr = np.empty(shape=(int)(cache_size/4), dtype=np.float32)  # 4bytes for n.float32
@@ -277,8 +281,8 @@ def sklearn_naive(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
         rep_lst = []
         for reps in range(repetitions):
             sklearn_naive_lst = []
-            filename = method_name + "_" + str(reps) + "_" + str(batch_size) + ".csv"
-            f = open(filename, "w")
+            # filename = method_name + "_" + str(reps) + "_" + str(batch_size) + ".csv"
+            # f = open(filename, "w")
             # Calculate for Sklearn Naive
             # ------------------------------------------------
             runs = (int)(Y_test.shape[0]/batch_size)
@@ -289,8 +293,8 @@ def sklearn_naive(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
                 clf.predict(X_test[i:(i+1)*batch_size])
                 delta = (datetime.now() - tstart)
                 sklearn_naive_lst.append(delta)
-                f.write(str(delta.total_seconds() * 1000) + '\n')
-            f.close()
+                # f.write(str(delta.total_seconds() * 1000) + '\n')
+            # f.close()
             op_time = reduce(add, sklearn_naive_lst)/Y_test.shape[0]
             print("Naive operation (us) is", op_time)
             rep_lst.append(op_time)
@@ -301,8 +305,9 @@ def sklearn_naive(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
 def packed_forest(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8):
     method_name = "packed_forest"
     print("Calling PackedForest")
-    batches = [batch_size]
-    # batches = [1, 10, 100]
+    print("N_threads", n_threads)
+    batches = [1, 10, 100, 500, 1000]
+    # batches = [1]
     # batches = [10000, 5000, 1000, 500, 100, 10, 1]
     arr = np.empty(shape=(int)(cache_size/4), dtype=np.float32)  # 4bytes for n.float32
 
@@ -323,8 +328,8 @@ def packed_forest(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
         rep_lst = []
         for reps in range(repetitions):
             packed_forest_lst = []
-            filename = method_name + "_" + str(reps) + "_" + str(batch_size) + ".csv"
-            f = open(filename, "w")
+            # filename = method_name + "_" + str(reps) + "_" + str(batch_size) + ".csv"
+            # f = open(filename, "w")
             runs = (int)(Y_test.shape[0] / batch_size)
 
             for i in range(0, runs):
@@ -334,9 +339,9 @@ def packed_forest(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threa
                 frst.predict(X_test[i:(i+1)*batch_size], n_threads=n_threads)
                 delta = (datetime.now() - tstart)
                 packed_forest_lst.append(delta)
-                f.write(str(delta.total_seconds()*1000) + '\n')
+                # f.write(str(delta.total_seconds()*1000) + '\n')
 
-            f.close()
+            # f.close()
             op_time = reduce(add, packed_forest_lst)/Y_test.shape[0]
             print("PackedForest normalized operation is", op_time)
             rep_lst.append(op_time)
@@ -451,8 +456,10 @@ def tree_lite(clf, X_test, Y_test, interleave_depth=2, batch_size=1, n_threads=8
 
 if __name__ == "__main__":
     # benchmark_mnist(n_estimators=16, interleave_depth=2, batch_size=10000, n_threads=multiprocessing.cpu_count())
-
-    benchmark_cifar10(n_estimators=128, interleave_depth=4, batch_size=1, n_threads=multiprocessing.cpu_count())
+    lst = [128, 256, 512, 1024, 2048]
+    # lst = [128]
+    for n in lst:
+        benchmark_cifar10(n_estimators=n, interleave_depth=4, batch_size=1, n_threads=multiprocessing.cpu_count())
 
     # benchmark_higgs(n_estimators=1, interleave_depth=2, batch_size=1, n_threads=multiprocessing.cpu_count())
 
