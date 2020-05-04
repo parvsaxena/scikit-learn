@@ -49,6 +49,18 @@ cdef extern from "immintrin.h":
     __m256d _mm256_setzero_pd() nogil
     enum: _CMP_LE_OS
 
+    __m256 _mm256_loadu_ps (float *__P) nogil
+    __m256 _mm256_load_ps (float *__P) nogil
+    __m256 _mm256_add_ps   (__m256 __A, __m256 __B) nogil
+    __m256 _mm256_mul_ps   (__m256 __A, __m256 __B) nogil
+    __m256 _mm256_fmadd_ps (__m256 __A, __m256 __B, __m256 __C) nogil
+    __m256 _mm256_cmp_ps (__m256 __X, __m256 __Y, const int __P) nogil
+    void   _mm256_store_ps (float *__P, __m256 __A) nogil
+    void   _mm256_storeu_ps (float *__P, __m256 __A) nogil
+    __m256 _mm256_blendv_ps(__m256 __A, __m256 __B, __m256 __C) nogil
+    __m256 _mm256_setzero_ps() nogil
+
+
 TREE_LEAF = -1
 TREE_UNDEFINED = -2
 cdef SIZE_t _TREE_LEAF = TREE_LEAF
@@ -361,8 +373,8 @@ cdef class PkdForest:
 
         cdef const DTYPE_t[:, :] X = X_ndarray
         cdef DOUBLE_t[:,:,:] predict_matrix = np.zeros(shape=(X.shape[0], self.n_trees, self.max_n_classes), dtype=np.float64)
-        # cdef SIZE_t[:,::1] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.intp)
-        cdef DOUBLE_t[:,::1] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.float64)
+        cdef SIZE_t[:,::1] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.intp)
+        # cdef DOUBLE_t[:,::1] curr_node = np.zeros(shape=(self.n_bins, self.bin_sizes[0]), dtype=np.float64)
 
         # print(self.bin_sizes[0])
         # print("Getting into predict\n")
@@ -373,19 +385,20 @@ cdef class PkdForest:
             SIZE_t internal_nodes_reached, offset
             SIZE_t next_node, child
             #TODO: cant seem to use union trick here, unions allowed only in pxd?
-            __m256d data_lane = _mm256_setzero_pd()
-            __m256d th_lane = _mm256_setzero_pd()
-            __m256d l_lane = _mm256_setzero_pd()
-            __m256d rt_lane = _mm256_setzero_pd()
-            __m256d mask = _mm256_setzero_pd()
-            SIZE_t stride = 4
+            # TODO: Maybe remove initialization
+            __m256 data_lane
+            __m256 th_lane
+            __m256 l_lane
+            __m256 rt_lane
+            __m256 mask
+            SIZE_t stride = 8
             SIZE_t depth = 0         
             # float *data = <float*> malloc(self.n_bins*stride*sizeof(float))
             # TODO: Make dynamic
-            double[4] data
-            double[4] threshold
-            double[4] left
-            double[4] right
+            float[8] data
+            float[8] threshold
+            float[8] left
+            float[8] right
             SIZE_t interleaving_depth = self.depth_interleaving
 
         # print(type(data_lane))
@@ -410,7 +423,7 @@ cdef class PkdForest:
         # if X.shape[0] == 1:
             for bin_no in range(0, self.n_bins):
            
-                for obs_no in range(0, 1):
+                for obs_no in range(0, X.shape[0]):
                 # for bin_no in prange(0, self.n_bins, nogil=True, schedule='static', num_threads = n_threads):
                     # data_lane = _mm256_load_ps(&data[0]) + 0.0
                     # data_lane = _mm256_setzero_ps()
@@ -436,8 +449,9 @@ cdef class PkdForest:
                                 #threshold[k] = self.node[bin_no][offset+k].threshold
                                 # left[k] = self.node[bin_no][offset+k].left_child
                                 # right[k] = self.node[bin_no][offset+k].right_child
-                                # left[k] = self.left_child[bin_no][offset+k]
-                                # right[k] = self.right_child[bin_no][offset+k]
+                                threshold[k] = self.threshold[bin_no][offset+k]
+                                left[k] = self.left_child[bin_no][offset+k]
+                                right[k] = self.right_child[bin_no][offset+k]
 
                                 # print(self.node[bin_no][k].feature)
                                 # print(self.node[bin_no][k].threshold)
@@ -459,16 +473,16 @@ cdef class PkdForest:
                             # print("left", np.asarray(left))
                             # print("right", np.asarray(right))
                             
-                            data_lane = _mm256_loadu_pd(&data[0])
-                            # th_lane = _mm256_loadu_pd(&threshold[0])
-                            # l_lane = _mm256_loadu_pd(&left[0])
-                            # rt_lane = _mm256_loadu_pd(&right[0])
+                            data_lane = _mm256_load_ps(&data[0])
+                            th_lane = _mm256_load_ps(&threshold[0])
+                            l_lane = _mm256_load_ps(&left[0])
+                            rt_lane = _mm256_load_ps(&right[0])
                             # memcpy(&left[0], &self.left_child[bin_no][offset], sizeof(double)*stride)
                             # print("New left is")
                             # print(left[0], left[1], left[2], left[3])
-                            th_lane = _mm256_loadu_pd(&self.threshold[bin_no][offset])
-                            l_lane = _mm256_loadu_pd(&self.left_child[bin_no][offset])
-                            rt_lane = _mm256_loadu_pd(&self.right_child[bin_no][offset])
+                            # th_lane = _mm256_loadu_pd(&self.threshold[bin_no][offset])
+                            # l_lane = _mm256_loadu_pd(&self.left_child[bin_no][offset])
+                            # rt_lane = _mm256_loadu_pd(&self.right_child[bin_no][offset])
                             # print("{0:x}".format(<unsigned long>&self.right_child[bin_no][offset]))
                             # print("{0:x}".format(<unsigned long>&self.right_child[bin_no][offset+1]))
                             # print("{0:x}".format(<unsigned long>&self.right_child[bin_no][offset+2]))
@@ -478,17 +492,18 @@ cdef class PkdForest:
                             # print("{0:x}".format(<unsigned long><double*>&self.right_child[bin_no][offset+2]))
 
                             # a <= b
-                            mask = _mm256_cmp_pd(data_lane, th_lane, _CMP_LE_OS)
+                            mask = _mm256_cmp_ps(data_lane, th_lane, _CMP_LE_OS)
                             # If mask T, second selected, else first
-                            data_lane = _mm256_blendv_pd(rt_lane, l_lane, mask)
+                            data_lane = _mm256_blendv_ps(rt_lane, l_lane, mask)
                             # The ones with mask go left, rest go right
                             # print(mask)
                             
-                            """
-                            _mm256_storeu_pd(&threshold[0], data_lane)
-                            """
+                            
+                            _mm256_store_ps(&threshold[0], data_lane)
+                            
                             # _mm256_storeu_pd(&threshold[0], data_lane)
-                            _mm256_storeu_pd(&curr_node[bin_no][offset], data_lane)
+                            
+                            # _mm256_storeu_pd(&curr_node[bin_no][offset], data_lane)
 
                             # curr_node[bin_no] = threshold
                             # print(np.asarray(threshold))
@@ -499,13 +514,13 @@ cdef class PkdForest:
                             # print(np.asarray(curr_node[bin_no]))
                             
                             
-                            """
+                            
                             for k in range(0, stride):
                                 # offset = step*stride
                                 # print("cur_nodes", threshold[k])
-                                # curr_node[bin_no][offset+k] = <SIZE_t>threshold[k]
-                                curr_node[bin_no][offset+k] = threshold[k]
-                            """
+                                curr_node[bin_no][offset+k] = <SIZE_t>threshold[k]
+                                # curr_node[bin_no][offset+k] = threshold[k]
+                            
                             # print(np.asarray(curr_node[bin_no]))
                             # break
                         depth = depth+1
@@ -515,10 +530,10 @@ cdef class PkdForest:
                     while internal_nodes_reached > 0:
                         internal_nodes_reached = 0
                         for tree_no in range(0, self.bin_sizes[bin_no]):
-                            if not self._is_class_node(&self.node[bin_no][<SIZE_t>curr_node[bin_no][tree_no]]):
-                                next_node, child = self._find_next_node(&self.node[bin_no][<SIZE_t>curr_node[bin_no,tree_no]], obs_no, X)
+                            if not self._is_class_node(&self.node[bin_no][curr_node[bin_no][tree_no]]):
+                                next_node, child = self._find_next_node(&self.node[bin_no][curr_node[bin_no,tree_no]], obs_no, X)
                                 if self._is_class_node(&self.node[bin_no][next_node]):
-                                    predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]] = self.value[bin_no][<SIZE_t>curr_node[bin_no][tree_no]][child]
+                                    predict_matrix[obs_no, tree_no + self.bin_offsets[bin_no]] = self.value[bin_no][curr_node[bin_no][tree_no]][child]
                                 curr_node[bin_no,tree_no] = next_node
                                 internal_nodes_reached = internal_nodes_reached + 1
             
